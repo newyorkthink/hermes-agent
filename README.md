@@ -11,7 +11,7 @@
 - RDP：`xrdp + xorgxrdp`
 - VNC：`Xvfb + x11vnc`
 - Web VNC：`noVNC + websockify`
-- 浏览器：Google Chrome
+- 浏览器：Google Chrome、Firefox ESR
 
 不包含 RealVNC Server，不保存 RealVNC `.deb`，也不在仓库中保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
 
@@ -56,10 +56,11 @@ RDP 使用 Hermes 上游自带的 `hermes` 用户，通过运行时环境变量�
 RDP_PASSWORD
 ```
 
-默认端口：
+默认监听地址和端口，可通过运行时环境变量覆盖：
 
 ```text
-3389
+RDP_BIND=0.0.0.0
+RDP_PORT=3389
 ```
 
 未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
@@ -78,11 +79,13 @@ VNC_PASSWORD
 
 未设置 `VNC_PASSWORD` 时，x11vnc 与 noVNC 不提供可连接的桌面会话，不会退回无密码模式。
 
-默认端口：
+默认监听地址和端口，可通过运行时环境变量覆盖：
 
 ```text
-VNC:   5900
-noVNC: 6080
+VNC_BIND=0.0.0.0
+VNC_PORT=5900
+NOVNC_BIND=0.0.0.0
+NOVNC_PORT=6080
 ```
 
 VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，桌面同样使用轻量 `Openbox + tint2 + PCManFM`；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
@@ -100,6 +103,8 @@ VNC_GEOMETRY=1920x1080
 RDP_ENABLE=0
 VNC_ENABLE=0
 ```
+
+监听地址设为 `127.0.0.1` 时只接受本机连接；在 `network_mode: host` 下可直接用于限制宿主机回环访问。使用 Docker bridge 网络并通过 `-p` 发布端口时，通常应保留容器内监听 `0.0.0.0`，再通过宿主机端口发布地址或防火墙限制访问范围。
 
 ## 运行示例
 

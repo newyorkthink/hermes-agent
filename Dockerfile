@@ -60,7 +60,7 @@ ENV GTK_IM_MODULE=fcitx \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 安装 Google Chrome；仅下载到构建临时目录，不在仓库保存二进制安装包。
+# 安装 Google Chrome；Firefox ESR 已通过上方 Debian 软件包安装。
 RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/chrome.deb && \
@@ -75,7 +75,7 @@ COPY --chmod=0755 docker/cont-init.d/03-remote-desktop /etc/cont-init.d/03-remot
 COPY docker/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
 RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0755 {} +
 
-# RDP、原生 VNC 和浏览器 noVNC 端口；实际是否可访问仍取决于运行容器时是否发布端口。
+# 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
 # 构建期只检查关键程序是否存在；不启动服务，不改写上游 ENTRYPOINT/CMD。
@@ -86,5 +86,7 @@ RUN command -v xrdp >/dev/null && \
     command -v websockify >/dev/null && \
     command -v openbox >/dev/null && \
     command -v tint2 >/dev/null && \
+    command -v firefox-esr >/dev/null && \
+    command -v google-chrome >/dev/null && \
     test -f /etc/X11/xrdp/xorg.conf && \
     test -x /etc/xrdp/startwm.sh
