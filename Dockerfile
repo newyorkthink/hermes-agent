@@ -8,10 +8,11 @@ LABEL org.opencontainers.image.base.name="docker.io/nousresearch/hermes-agent:la
 # 派生镜像只增加通用工具和远程桌面组件，不覆盖 Hermes 自带的 Node、npm、Playwright 与 s6-overlay。
 USER root
 
-# 安装办公、文档、图像、开发、桌面、RDP/VNC 与中文输入法组件。
+# 先用基础镜像自带的 apt-get 引导安装 aptitude；后续系统软件统一由 aptitude 安装并保留 Debian 推荐依赖。
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        aptitude \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aptitude && \
+    aptitude update && \
+    DEBIAN_FRONTEND=noninteractive aptitude install -y \
         libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
@@ -57,12 +58,13 @@ ENV GTK_IM_MODULE=fcitx \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 安装 Google Chrome；Firefox ESR 已通过上方 Debian 软件包安装。
+# 安装 Google Chrome；先解包本地 deb，再由 aptitude 统一补齐并配置依赖。
 RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb && \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/chrome.deb && \
+    (dpkg -i /tmp/chrome.deb || true) && \
+    aptitude update && \
+    DEBIAN_FRONTEND=noninteractive aptitude install -f -y && \
     rm -f /tmp/chrome.deb && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 # xrdp 使用标准 Xorg 会话；桌面保持轻量 Openbox + tint2 + PCManFM。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
