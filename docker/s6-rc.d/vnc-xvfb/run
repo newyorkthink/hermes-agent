@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+set -eu
+
+case "${VNC_ENABLE:-1}" in
+    1|true|TRUE|True|yes|YES|Yes) ;;
+    *) exec sleep infinity ;;
+esac
+
+geometry="${VNC_GEOMETRY:-1920x1080}"
+export HOME=/opt/data
+exec s6-setuidgid hermes Xvfb :0 -screen 0 "${geometry}x24" -nolisten tcp -ac

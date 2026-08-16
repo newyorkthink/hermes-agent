@@ -1,0 +1,18 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+set -eu
+
+case "${VNC_ENABLE:-1}" in
+    1|true|TRUE|True|yes|YES|Yes) ;;
+    *) exec sleep infinity ;;
+esac
+
+if [ ! -s /run/x11vnc.pass ]; then
+    echo "[noVNC] VNC_PASSWORD 未设置，noVNC 服务保持禁用。" >&2
+    exec sleep infinity
+fi
+
+exec s6-setuidgid hermes websockify \
+    --web=/usr/share/novnc \
+    0.0.0.0:6080 \
+    127.0.0.1:5900

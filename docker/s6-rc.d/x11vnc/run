@@ -1,0 +1,29 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+set -eu
+
+case "${VNC_ENABLE:-1}" in
+    1|true|TRUE|True|yes|YES|Yes) ;;
+    *) exec sleep infinity ;;
+esac
+
+if [ ! -s /run/x11vnc.pass ]; then
+    echo "[x11vnc] VNC_PASSWORD 未设置，VNC 服务保持禁用。" >&2
+    exec sleep infinity
+fi
+
+export DISPLAY=:0
+export HOME=/opt/data
+
+while ! xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; do
+    sleep 1
+done
+
+exec s6-setuidgid hermes x11vnc \
+    -display "${DISPLAY}" \
+    -rfbauth /run/x11vnc.pass \
+    -rfbport 5900 \
+    -listen 0.0.0.0 \
+    -forever \
+    -shared \
+    -noxdamage
