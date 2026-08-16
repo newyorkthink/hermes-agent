@@ -20,7 +20,7 @@ RUN apt-get update && \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
         fonts-wqy-zenhei fonts-wqy-microhei xfonts-base xfonts-75dpi fontconfig \
-        newsboat strace vim tmux \
+        newsboat strace vim tmux lsof rsync tree fd-find ncdu zstd \
         curl wget git zip unzip p7zip-full jq aria2 \
         locales ca-certificates tzdata procps net-tools iputils-ping iproute2 iptables dnsutils socat \
         default-jre-headless \

@@ -4,14 +4,21 @@
 
 ## 主要内容
 
-- 办公与文档：LibreOffice、Pandoc、Poppler、Ghostscript
-- 图像与媒体：FFmpeg、ImageMagick、SoX、Tesseract OCR
-- 开发与诊断：Git、Vim、tmux、strace、构建工具
-- 桌面：Openbox、tint2、PCManFM、Fcitx5、中文字体
-- RDP：`xrdp + xorgxrdp`
-- VNC：`Xvfb + x11vnc`
-- Web VNC：`noVNC + websockify`
+以下为本派生 Dockerfile 显式安装的软件和工具；APT 自动拉取的依赖不逐项展开。
+
+- 办公与文档：`libreoffice`、`pandoc`、`poppler-utils`、`ghostscript`
+- 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：Google Chrome、Firefox ESR
+- 轻量桌面：`openbox`、`tint2`、`pcmanfm`、`mousepad`、`lxterminal`、`xterm`
+- RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
+- X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`xdotool`、`wmctrl`、`scrot`、`xclip`
+- 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`im-config`
+- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`breeze-icon-theme`
+- 常用命令与文件工具：`aptitude`、`newsboat`、`vim`、`tmux`、`strace`、`lsof`、`rsync`、`tree`、`fd-find`（命令为 `fdfind`）、`ncdu`、`zstd`、`zip`、`unzip`、`p7zip-full`、`jq`、`aria2`、`file`
+- 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`
+- 开发与底层依赖：`build-essential`、`libssl-dev`、`libffi-dev`、`libxml2-dev`、`libxslt1-dev`、`libjpeg-dev`、`libpng-dev`、`libwebp-dev`、`libmagic-dev`、`sqlite3`、`libsqlite3-dev`、`default-jre-headless`
+- 桌面与运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`keepassxc`、`libxcb-cursor0`、`qt5ct`
+- 基础环境：`locales`、`ca-certificates`、`tzdata`
 
 不包含 RealVNC Server，不保存 RealVNC `.deb`，也不在仓库中保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
 
