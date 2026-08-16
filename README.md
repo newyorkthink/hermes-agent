@@ -21,7 +21,7 @@
 - 桌面与运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
 - 基础环境：`locales`、`ca-certificates`、`tzdata`
 
-不包含 RealVNC Server，不保存 RealVNC `.deb`，也不在仓库中保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
+仓库中不保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
 
 ## 镜像
 
