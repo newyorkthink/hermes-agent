@@ -29,7 +29,7 @@ RUN apt-get update && \
         build-essential pkg-config libssl-dev libffi-dev libxml2-dev libxslt1-dev \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
-        sudo dbus-x11 xdotool wmctrl scrot \
+        sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
         libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme breeze-icon-theme \
