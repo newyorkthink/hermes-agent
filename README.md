@@ -4,7 +4,7 @@
 
 ## 主要内容
 
-以下为本派生 Dockerfile 显式安装的软件和工具；APT 自动拉取的依赖不逐项展开。
+以下为本派生 Dockerfile 显式安装的软件和工具；基础镜像先用 `apt-get` 引导安装 `aptitude`，后续系统软件统一由 `aptitude` 安装并保留 Debian 推荐依赖，自动拉取的依赖不逐项展开。
 
 - 办公与文档：`libreoffice`、`libreoffice-gtk3`、`pandoc`、`poppler-utils`、`ghostscript`
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
@@ -56,6 +56,20 @@ GitHub Actions 每 6 小时检查一次上游镜像 digest：
 
 构建时会把实际使用的上游 digest 写入镜像元数据，用于下一次自动检查，不需要保存日期版本或额外状态文件。
 
+## 桌面环境与持久化
+
+RDP 与 VNC 桌面都固定使用轻量 `Openbox + tint2 + PCManFM`，并统一使用：
+
+```text
+HOME=/opt/data
+LANG=zh_CN.UTF-8
+LANGUAGE=zh_CN:zh
+LC_ALL=zh_CN.UTF-8
+GTK_THEME=Adwaita:dark
+```
+
+桌面会话启动时会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+
 ## RDP
 
 RDP 使用 Hermes 上游自带的 `hermes` 用户，通过运行时环境变量设置密码：
@@ -76,6 +90,28 @@ RDP_PORT=3389
 RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面固定为轻量 `Openbox + tint2 + PCManFM`。xrdp 守护进程以 `xrdp` 用户运行，因此镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免会话已经创建但主 xrdp 进程无法访问 session socket 而出现 `Error connecting to user session`。
 
 RDP 登录成功进入用户会话后，剪贴板由 xrdp 的 `chansrv/cliprdr` 提供，配置允许双向剪贴板。xrdp 自身的登录窗口出现在用户会话和 `chansrv` 建立之前，因此登录窗口的密码框不能依赖 RDP 剪贴板粘贴；进入桌面后的普通文本复制粘贴不受此限制。
+
+### RDP 共享目录
+
+xrdp 的目录重定向通过 `chansrv + FUSE` 工作。只有需要使用 RDP 客户端“共享目录”功能时，才需要给容器增加：
+
+```yaml
+cap_add:
+  - SYS_ADMIN
+
+devices:
+  - /dev/fuse:/dev/fuse
+```
+
+`SYS_ADMIN` 权限范围较大，不使用 RDP 共享目录时不需要添加。
+
+在 Remmina 等客户端的“共享目录”中填写宿主机需要共享的绝对路径后，进入 RDP 会话可从下面的位置访问：
+
+```text
+/opt/data/thinclient_drives/
+```
+
+其下会出现由客户端生成的共享名称。PCManFM 不一定自动把 xrdp 的 FUSE 共享目录加入左侧“位置”栏；首次进入对应共享目录后，可通过“书签”将当前目录加入左侧栏，之后直接从左侧访问。
 
 ## VNC / noVNC
 
@@ -98,6 +134,8 @@ NOVNC_PORT=6080
 
 VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，桌面同样使用轻量 `Openbox + tint2 + PCManFM`；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
 
+x11vnc 显式禁用 IPv6 监听，避免在只希望通过 IPv4 回环地址访问时额外出现 IPv6 监听端口。
+
 可选设置：
 
 ```text
@@ -116,17 +154,38 @@ VNC_ENABLE=0
 
 ## 运行示例
 
-密码只在运行容器时自行设置，不要写入仓库：
+密码只在运行容器时自行设置，不要写入仓库。下面示例同时把 `/opt/data` 持久化到宿主机当前目录下的 `data`：
 
 ```bash
 docker run -d \
   --name hermes-agent \
   -e RDP_PASSWORD='自行设置强密码' \
   -e VNC_PASSWORD='自行设置强密码' \
+  -v "$(pwd)/data:/opt/data" \
   -p 3389:3389 \
   -p 5900:5900 \
   -p 6080:6080 \
   ghcr.io/newyorkthink/hermes-agent:latest
 ```
 
+如果需要 RDP 共享目录，再额外增加 `--cap-add=SYS_ADMIN --device=/dev/fuse:/dev/fuse`；普通远程桌面连接不需要这两个权限。
+
 公网环境不要直接暴露远程桌面端口，优先通过防火墙、VPN 或可信内网限制访问范围。
+
+## 常见问题
+
+### RDP 共享目录已经存在，但 PCManFM 左侧没有显示
+
+这是 PCManFM 左侧栏没有自动加入 xrdp FUSE 共享目录，不代表挂载失败。先打开 `/opt/data/thinclient_drives/` 下实际出现的共享目录，再通过“书签”把当前目录加入左侧栏即可。
+
+### `docker exec` 查看 `/opt/data/thinclient_drives` 提示权限不足
+
+RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过 `docker exec` 以其他用户直接读取时可能出现权限不足。应以 RDP 会话内能否正常进入共享目录并看到宿主机文件作为主要验证方式。
+
+### Fcitx5 的“Configure”打开配置目录而不是图形配置工具
+
+旧镜像在缺少 Fcitx5 图形配置组件时可能出现这种情况。当前镜像使用 `aptitude` 保留 Debian 推荐依赖，会自动补齐 Fcitx5 推荐的图形配置和桌面集成组件；更新到最新镜像并重建容器即可。
+
+### tint2 / Openbox 菜单部分项目没有图标，日志出现 `Could not find icon`
+
+这类提示通常是菜单项引用的图标名称或 `.desktop` 文件与当前图标主题不匹配，程序本身仍可正常启动，不等同于软件包缺失。图标显示属于桌面菜单集成问题，可单独调整菜单项或图标映射。
