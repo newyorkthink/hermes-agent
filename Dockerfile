@@ -12,7 +12,7 @@ USER root
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         aptitude \
-        libreoffice pandoc poppler-utils ghostscript \
+        libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
         openbox tint2 pcmanfm mousepad lxterminal xterm firefox-esr \
@@ -30,10 +30,10 @@ RUN apt-get update && \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 xdotool wmctrl scrot \
-        fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 im-config \
+        fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
-        libgtk2.0-0t64 adwaita-icon-theme breeze-icon-theme \
-        xclip libxcb-cursor0 qt5ct && \
+        libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme breeze-icon-theme \
+        xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
 
