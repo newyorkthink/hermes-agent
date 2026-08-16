@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.token
+credentials*
+secrets*
+private*
+*.log
+__pycache__/
+*.pyc
+.DS_Store
