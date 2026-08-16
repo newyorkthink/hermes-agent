@@ -13,9 +13,22 @@ export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
 
 # 保持轻量桌面，仅使用 Openbox + tint2 + PCManFM。
-# 先初始化中文用户目录并启动 Openbox，确认窗口管理器就绪后再启动桌面和面板，避免 RDP 登录后只剩黑色根窗口。
+# 先初始化中文用户目录和 GTK 图标主题，再启动 Openbox；仅在用户未设置图标主题时默认使用 Adwaita，不覆盖现有主题设置。
 exec dbus-run-session -- sh -c '
     command -v xdg-user-dirs-update >/dev/null 2>&1 && xdg-user-dirs-update >/dev/null 2>&1 || true
+
+    gtk_settings="$HOME/.config/gtk-3.0/settings.ini"
+    mkdir -p "$HOME/.config/gtk-3.0"
+    if [ ! -s "$gtk_settings" ]; then
+        printf "%s\n" "[Settings]" "gtk-icon-theme-name=Adwaita" > "$gtk_settings"
+    elif ! grep -q "^[[:space:]]*gtk-icon-theme-name[[:space:]]*=" "$gtk_settings"; then
+        if grep -q "^\[Settings\][[:space:]]*$" "$gtk_settings"; then
+            sed -i "/^\[Settings\][[:space:]]*$/a gtk-icon-theme-name=Adwaita" "$gtk_settings"
+        else
+            printf "%s\n" "" "[Settings]" "gtk-icon-theme-name=Adwaita" >> "$gtk_settings"
+        fi
+    fi
+
     fcitx5 -d >/dev/null 2>&1 || true
 
     openbox &

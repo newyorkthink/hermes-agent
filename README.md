@@ -67,7 +67,7 @@ LANGUAGE=zh_CN:zh
 LC_ALL=zh_CN.UTF-8
 ```
 
-桌面启动脚本不固定 GTK 主题，主题按用户自己的桌面配置生效。桌面会话启动时会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+桌面启动脚本不固定 GTK 明暗主题，主题按用户自己的桌面配置生效。若用户尚未在 `~/.config/gtk-3.0/settings.ini` 中设置 `gtk-icon-theme-name`，首次桌面会话会默认写入 `Adwaita` 图标主题；已有图标主题设置不会被覆盖。桌面会话启动时还会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
 
 ## RDP
 
@@ -185,6 +185,8 @@ RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过
 
 旧镜像在缺少 Fcitx5 图形配置组件时可能出现这种情况。当前镜像使用 `aptitude` 保留 Debian 推荐依赖，会自动补齐 Fcitx5 推荐的图形配置和桌面集成组件；更新到最新镜像并重建容器即可。
 
-### tint2 / Openbox 菜单部分项目没有图标，日志出现 `Could not find icon`
+### PCManFM / tint2 部分图标空白或颜色异常
 
-当前镜像额外安装 `lxde-icon-theme` 补充 LXDE/PCManFM 常用图标。若仍有少数项目没有图标，通常是菜单项引用的图标名称或 `.desktop` 文件与当前图标主题不匹配，程序本身仍可正常启动，不等同于软件包缺失。
+当前镜像安装 `Adwaita`、`Breeze` 和 `LXDE` 图标资源。若 GTK3 用户配置中没有指定图标主题，桌面启动时默认初始化 `gtk-icon-theme-name=Adwaita`，避免 PCManFM 等程序在没有明确图标主题时出现缺图标；该设置不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。
+
+Fcitx5 托盘右键菜单中的“配置”“重新启动”“退出”等文字项本身由 Fcitx5 上游 X11 托盘菜单实现，未为这些菜单项设置图标，因此没有菜单图标不代表缺包或图标主题损坏。
