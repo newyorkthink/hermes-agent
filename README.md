@@ -17,13 +17,36 @@
 
 ## 镜像
 
-GitHub Actions 只发布一个标签：
+GHCR 镜像地址：
 
 ```text
 ghcr.io/newyorkthink/hermes-agent:latest
 ```
 
-不创建日期标签、提交 SHA 标签或 GitHub Release。
+拉取最新镜像：
+
+```bash
+docker pull ghcr.io/newyorkthink/hermes-agent:latest
+```
+
+GitHub Actions 只发布 `latest`，不上传 Docker Hub，不创建日期标签、提交 SHA 标签或 GitHub Release。
+
+## 自动跟踪上游
+
+上游基础镜像：
+
+```text
+nousresearch/hermes-agent:latest
+```
+
+GitHub Actions 每 6 小时检查一次上游镜像 digest：
+
+- 上游 digest 没有变化：直接结束，不执行完整 Docker 构建。
+- 上游 digest 发生变化：自动重新构建并覆盖 `ghcr.io/newyorkthink/hermes-agent:latest`。
+- 本仓库 Dockerfile、远程桌面配置或 workflow 发生变化时：立即重新构建 `latest`。
+- 也可以通过 `workflow_dispatch` 手动触发构建。
+
+构建时会把实际使用的上游 digest 写入镜像元数据，用于下一次自动检查，不需要保存日期版本或额外状态文件。
 
 ## RDP
 

@@ -1,5 +1,10 @@
 FROM nousresearch/hermes-agent:latest
 
+# 记录本次构建使用的上游镜像 digest，供定时任务判断上游是否已经更新。
+ARG UPSTREAM_DIGEST=unknown
+LABEL org.opencontainers.image.base.name="docker.io/nousresearch/hermes-agent:latest" \
+      org.opencontainers.image.base.digest="${UPSTREAM_DIGEST}"
+
 # 派生镜像只增加通用工具和远程桌面组件，不覆盖 Hermes 自带的 Node、npm、Playwright 与 s6-overlay。
 USER root
 
