@@ -33,7 +33,7 @@ RUN apt-get update && \
         sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
-        libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme breeze-icon-theme \
+        libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme breeze-icon-theme lxde-icon-theme \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)

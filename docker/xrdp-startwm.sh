@@ -8,7 +8,6 @@ export HOME=/opt/data
 export LANG=zh_CN.UTF-8
 export LANGUAGE=zh_CN:zh
 export LC_ALL=zh_CN.UTF-8
-export GTK_THEME=Adwaita:dark
 export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox

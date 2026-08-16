@@ -12,7 +12,6 @@ export HOME=/opt/data
 export LANG=zh_CN.UTF-8
 export LANGUAGE=zh_CN:zh
 export LC_ALL=zh_CN.UTF-8
-export GTK_THEME=Adwaita:dark
 
 while ! xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; do
     sleep 1

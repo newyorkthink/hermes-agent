@@ -13,7 +13,7 @@
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
-- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`breeze-icon-theme`
+- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`breeze-icon-theme`、`lxde-icon-theme`
 - 常用命令与文件工具：`aptitude`、`newsboat`、`vim`、`tmux`、`strace`、`lsof`、`rsync`、`tree`、`ncdu`、`zstd`、`psmisc`、`moreutils`、`inotify-tools`、`patch`、`less`、`pv`、`time`、`fzf`、`duf`、`dos2unix`、`bsdextrautils`、`gettext-base`、`bc`、`zip`、`unzip`、`p7zip-full`、`jq`、`aria2`、`file`
 - 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`、`netcat-openbsd`、`whois`
 - 加密与证书工具：`openssl`、`gnupg`
@@ -65,10 +65,9 @@ HOME=/opt/data
 LANG=zh_CN.UTF-8
 LANGUAGE=zh_CN:zh
 LC_ALL=zh_CN.UTF-8
-GTK_THEME=Adwaita:dark
 ```
 
-桌面会话启动时会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+桌面启动脚本不固定 GTK 主题，主题按用户自己的桌面配置生效。桌面会话启动时会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
 
 ## RDP
 
@@ -188,4 +187,4 @@ RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过
 
 ### tint2 / Openbox 菜单部分项目没有图标，日志出现 `Could not find icon`
 
-这类提示通常是菜单项引用的图标名称或 `.desktop` 文件与当前图标主题不匹配，程序本身仍可正常启动，不等同于软件包缺失。图标显示属于桌面菜单集成问题，可单独调整菜单项或图标映射。
+当前镜像额外安装 `lxde-icon-theme` 补充 LXDE/PCManFM 常用图标。若仍有少数项目没有图标，通常是菜单项引用的图标名称或 `.desktop` 文件与当前图标主题不匹配，程序本身仍可正常启动，不等同于软件包缺失。
