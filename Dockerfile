@@ -22,9 +22,11 @@ RUN apt-get update && \
         fonts-wqy-zenhei fonts-wqy-microhei xfonts-base xfonts-75dpi fontconfig \
         newsboat strace vim tmux lsof rsync tree ncdu zstd \
         psmisc moreutils inotify-tools netcat-openbsd patch less pv time fzf duf \
+        dos2unix bsdextrautils gettext-base bc \
         curl wget git zip unzip p7zip-full jq aria2 \
-        locales ca-certificates tzdata procps net-tools iputils-ping iproute2 iptables dnsutils socat \
-        build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev \
+        locales ca-certificates tzdata procps net-tools iputils-ping iproute2 iptables dnsutils socat whois \
+        openssl gnupg \
+        build-essential pkg-config libssl-dev libffi-dev libxml2-dev libxslt1-dev \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 xdotool wmctrl scrot \
