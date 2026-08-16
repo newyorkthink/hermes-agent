@@ -7,7 +7,7 @@
 - 办公与文档：LibreOffice、Pandoc、Poppler、Ghostscript、python3-uno、python-docx、openpyxl
 - 图像与媒体：FFmpeg、ImageMagick、SoX、Tesseract OCR
 - 开发与诊断：Git、Vim、tmux、strace、常用 Python 库、构建工具
-- 桌面：XFCE、Openbox、PCManFM、Fcitx5、中文字体
+- 桌面：Openbox、tint2、PCManFM、Fcitx5、中文字体
 - RDP：`xrdp + xorgxrdp`
 - VNC：`Xvfb + x11vnc`
 - Web VNC：`noVNC + websockify`
@@ -64,7 +64,7 @@ RDP_PASSWORD
 
 未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
 
-RDP 使用 xorgxrdp 创建独立 Xorg 会话，登录后启动完整 XFCE 桌面；同时强制桌面会话使用软件渲染，避免容器内 `/dev/dri` 权限问题造成黑屏。RDP 剪贴板由 xrdp 自身提供，不依赖 KDE Connect。
+RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面保持轻量 `Openbox + tint2 + PCManFM`；会话强制使用软件渲染，避免容器内 `/dev/dri` 权限问题造成黑屏。RDP 剪贴板由 xrdp 自身提供，不依赖 KDE Connect。
 
 ## VNC / noVNC
 
@@ -83,7 +83,7 @@ VNC:   5900
 noVNC: 6080
 ```
 
-VNC 桌面默认运行在独立的 Xvfb `:99` 会话中；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
+VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，桌面同样使用轻量 `Openbox + tint2 + PCManFM`；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
 
 可选设置：
 

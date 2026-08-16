@@ -9,6 +9,10 @@ esac
 
 export DISPLAY="${VNC_DISPLAY:-:99}"
 export HOME=/opt/data
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+export QT_XCB_FORCE_SOFTWARE_OPENGL=1
+export QT_QUICK_BACKEND=software
 
 while ! xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; do
     sleep 1
@@ -17,6 +21,6 @@ done
 exec s6-setuidgid hermes dbus-run-session -- sh -c '
     fcitx5 -d >/dev/null 2>&1 || true
     pcmanfm --desktop >/dev/null 2>&1 &
-    xfce4-panel >/dev/null 2>&1 &
-    exec openbox-session
+    tint2 >/dev/null 2>&1 &
+    exec openbox
 '

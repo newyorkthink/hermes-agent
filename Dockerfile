@@ -15,7 +15,7 @@ RUN apt-get update && \
         libreoffice pandoc poppler-utils ghostscript python3-uno \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox xfce4-session xfce4-settings xfce4-panel xfdesktop4 pcmanfm mousepad lxterminal xterm firefox-esr \
+        openbox tint2 pcmanfm mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
@@ -27,7 +27,7 @@ RUN apt-get update && \
         build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
-        python3-pip python3-dev python3-venv python3-xdg \
+        python3-pip python3-dev python3-venv \
         python3-requests python3-httpx python3-aiohttp \
         python3-numpy python3-pandas python3-lxml python3-bs4 python3-yaml python3-regex \
         python3-pil python3-psutil python3-dateutil python3-click python3-rich python3-tqdm python3-tk \
@@ -60,7 +60,7 @@ RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd6
     rm -f /tmp/chrome.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# xrdp 使用标准 Xorg 会话；RDP 登录后启动完整 XFCE 会话。
+# xrdp 使用标准 Xorg 会话；桌面保持轻量 Openbox + tint2 + PCManFM。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
 
 # 在 Hermes 自带的 s6-overlay 中增加远程桌面初始化与监督服务。
@@ -77,6 +77,7 @@ RUN command -v xrdp >/dev/null && \
     command -v Xvfb >/dev/null && \
     command -v x11vnc >/dev/null && \
     command -v websockify >/dev/null && \
-    command -v startxfce4 >/dev/null && \
+    command -v openbox >/dev/null && \
+    command -v tint2 >/dev/null && \
     test -f /etc/X11/xrdp/xorg.conf && \
     test -x /etc/xrdp/startwm.sh
