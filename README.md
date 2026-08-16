@@ -4,9 +4,9 @@
 
 ## 主要内容
 
-- 办公与文档：LibreOffice、Pandoc、Poppler、Ghostscript、python3-uno、python-docx、openpyxl
+- 办公与文档：LibreOffice、Pandoc、Poppler、Ghostscript
 - 图像与媒体：FFmpeg、ImageMagick、SoX、Tesseract OCR
-- 开发与诊断：Git、Vim、tmux、strace、常用 Python 库、构建工具
+- 开发与诊断：Git、Vim、tmux、strace、构建工具
 - 桌面：Openbox、tint2、PCManFM、Fcitx5、中文字体
 - RDP：`xrdp + xorgxrdp`
 - VNC：`Xvfb + x11vnc`

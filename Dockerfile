@@ -12,7 +12,7 @@ USER root
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         aptitude \
-        libreoffice pandoc poppler-utils ghostscript python3-uno \
+        libreoffice pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
         openbox tint2 pcmanfm mousepad lxterminal xterm firefox-esr \
@@ -27,11 +27,6 @@ RUN apt-get update && \
         build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
-        python3-pip python3-dev python3-venv \
-        python3-requests python3-httpx python3-aiohttp \
-        python3-numpy python3-pandas python3-lxml python3-bs4 python3-yaml python3-regex \
-        python3-pil python3-psutil python3-dateutil python3-click python3-rich python3-tqdm python3-tk \
-        python3-docx python3-openpyxl python3-redis redis-server \
         sudo dbus-x11 xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
