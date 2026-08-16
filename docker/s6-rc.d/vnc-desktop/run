@@ -9,14 +9,19 @@ esac
 
 export DISPLAY="${VNC_DISPLAY:-:99}"
 export HOME=/opt/data
+export LANG=zh_CN.UTF-8
+export LANGUAGE=zh_CN:zh
+export LC_ALL=zh_CN.UTF-8
+export GTK_THEME=Adwaita:dark
 
 while ! xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; do
     sleep 1
 done
 
 # 保持轻量桌面，仅使用 Openbox + tint2 + PCManFM。
-# 先启动 Openbox，确认窗口管理器就绪后再启动桌面和面板，避免只显示黑色根窗口。
+# 先初始化中文用户目录并启动 Openbox，确认窗口管理器就绪后再启动桌面和面板，避免只显示黑色根窗口。
 exec s6-setuidgid hermes dbus-run-session -- sh -c '
+    command -v xdg-user-dirs-update >/dev/null 2>&1 && xdg-user-dirs-update >/dev/null 2>&1 || true
     fcitx5 -d >/dev/null 2>&1 || true
 
     openbox &
