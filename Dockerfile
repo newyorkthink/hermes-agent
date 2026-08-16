@@ -20,17 +20,17 @@ RUN apt-get update && \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
         fonts-wqy-zenhei fonts-wqy-microhei xfonts-base xfonts-75dpi fontconfig \
-        newsboat strace vim tmux lsof rsync tree fd-find ncdu zstd \
+        newsboat strace vim tmux lsof rsync tree ncdu zstd \
+        psmisc moreutils inotify-tools netcat-openbsd patch less pv time fzf duf \
         curl wget git zip unzip p7zip-full jq aria2 \
         locales ca-certificates tzdata procps net-tools iputils-ping iproute2 iptables dnsutils socat \
-        default-jre-headless \
         build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev \
         libjpeg-dev libpng-dev libwebp-dev libmagic-dev file exiftool \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
-        libgtk2.0-0t64 keepassxc adwaita-icon-theme breeze-icon-theme \
+        libgtk2.0-0t64 adwaita-icon-theme breeze-icon-theme \
         xclip libxcb-cursor0 qt5ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
