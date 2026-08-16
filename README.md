@@ -1,6 +1,6 @@
 # Hermes Agent Custom Image
 
-基于 `nousresearch/hermes-agent:latest` 的公开增强镜像，只增加通用工具、桌面环境和远程访问组件，不修改 Hermes 上游的 ENTRYPOINT、CMD、s6-overlay、Node/npm 或 Playwright 运行架构。
+基于 `nousresearch/hermes-agent:latest` 的公开增强镜像，只增加通用工具、轻量桌面和远程访问组件；不覆盖 Hermes 上游的 ENTRYPOINT/CMD，不替换 s6-overlay，也不重装上游自带的 Node/npm 或 Playwright 运行架构。
 
 ## 主要内容
 
@@ -64,7 +64,9 @@ RDP_PASSWORD
 
 未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
 
-RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面保持轻量 `Openbox + tint2 + PCManFM`；会话强制使用软件渲染，避免容器内 `/dev/dri` 权限问题造成黑屏。RDP 剪贴板由 xrdp 自身提供，不依赖 KDE Connect。
+RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面固定为轻量 `Openbox + tint2 + PCManFM`。xrdp 守护进程以 `xrdp` 用户运行，因此镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免会话已经创建但主 xrdp 进程无法访问 session socket 而出现 `Error connecting to user session`。
+
+RDP 登录成功进入用户会话后，剪贴板由 xrdp 的 `chansrv/cliprdr` 提供，配置允许双向剪贴板。xrdp 自身的登录窗口出现在用户会话和 `chansrv` 建立之前，因此登录窗口的密码框不能依赖 RDP 剪贴板粘贴；进入桌面后的普通文本复制粘贴不受此限制。
 
 ## VNC / noVNC
 
