@@ -4,7 +4,7 @@ set -eu
 unset DBUS_SESSION_BUS_ADDRESS
 unset SESSION_MANAGER
 
-export HOME="${HOME:-/opt/data}"
+export HOME=/opt/data
 export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
