@@ -46,6 +46,13 @@ RUN sed -i '/zh_CN.UTF-8/s/^# //g' /etc/locale.gen && \
     fc-cache -f && \
     (adduser xrdp ssl-cert >/dev/null 2>&1 || true)
 
+# xrdp 在容器内以 xrdp 用户运行；sesman 必须把会话 socket 目录交给同组，否则会出现“Error connecting to user session”。
+RUN sed -ri 's/^[[:space:]]*#[[:space:]]*SessionSockdirGroup=root[[:space:]]*$/SessionSockdirGroup=xrdp/' /etc/xrdp/sesman.ini && \
+    grep -q '^SessionSockdirGroup=xrdp$' /etc/xrdp/sesman.ini && \
+    grep -q '^RestrictOutboundClipboard=none$' /etc/xrdp/sesman.ini && \
+    grep -q '^RestrictInboundClipboard=none$' /etc/xrdp/sesman.ini && \
+    grep -q '^cliprdr=true$' /etc/xrdp/xrdp.ini
+
 ENV GTK_IM_MODULE=fcitx \
     QT_IM_MODULE=fcitx \
     XMODIFIERS=@im=fcitx \
