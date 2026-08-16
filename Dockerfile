@@ -36,7 +36,7 @@ RUN apt-get update && \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
         libgtk2.0-0t64 keepassxc adwaita-icon-theme breeze-icon-theme \
-        xclip kdeconnect libxcb-cursor0 qt5ct && \
+        xclip libxcb-cursor0 qt5ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
 
