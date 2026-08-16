@@ -9,15 +9,23 @@ export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
 
-# xorgxrdp 会话默认使用软件渲染，避免容器内 /dev/dri 权限导致黑屏或 EGL 警告。
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-export QT_XCB_FORCE_SOFTWARE_OPENGL=1
-export QT_QUICK_BACKEND=software
-
+# 保持轻量桌面，仅使用 Openbox + tint2 + PCManFM。
+# 先启动 Openbox，确认窗口管理器就绪后再启动桌面和面板，避免 RDP 登录后只剩黑色根窗口。
 exec dbus-run-session -- sh -c '
     fcitx5 -d >/dev/null 2>&1 || true
-    pcmanfm --desktop >/dev/null 2>&1 &
-    tint2 >/dev/null 2>&1 &
-    exec openbox
+
+    openbox &
+    wm_pid=$!
+
+    i=0
+    while ! wmctrl -m >/dev/null 2>&1; do
+        i=$((i + 1))
+        [ "$i" -ge 50 ] && break
+        sleep 0.1
+    done
+
+    pcmanfm --desktop &
+    tint2 &
+
+    wait "$wm_pid"
 '
