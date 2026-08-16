@@ -64,7 +64,7 @@ RDP_PASSWORD
 
 未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
 
-RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面为 Openbox + XFCE Panel + PCManFM。
+RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面为 Openbox + XFCE Panel + PCManFM；RDP 剪贴板由 xrdp 自身提供，不依赖 KDE Connect。
 
 ## VNC / noVNC
 
@@ -83,11 +83,12 @@ VNC:   5900
 noVNC: 6080
 ```
 
-VNC 桌面运行在独立的 Xvfb `:0` 会话中；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。
+VNC 桌面默认运行在独立的 Xvfb `:99` 会话中；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
 
-可选分辨率：
+可选设置：
 
 ```text
+VNC_DISPLAY=:99
 VNC_GEOMETRY=1920x1080
 ```
 
