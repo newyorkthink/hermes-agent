@@ -367,6 +367,26 @@ XMODIFIERS=@im=fcitx
 
 并启动 `fcitx5`。构建阶段还会检查 GTK3 输入模块、拼音模块、拼音配置和 Fcitx5 图标资源。
 
+## 踩坑记录
+
+以下问题均为本镜像实际遇到并处理过的情况。后续调整远程桌面、桌面组件、持久化配置或构建逻辑时，应保留对应修复，不要只根据表面现象回退已经稳定的链路。
+
+- **自定义 VNC 端口仍抢占宿主机 `5900`**：`VNC_PORT=5999` 时，x11vnc 的 IPv4 已正确监听 `127.0.0.1:5999`，但当前 x11vnc / LibVNCServer 组合曾额外建立 `[::]:5900`，在 `network_mode: host` 下直接与宿主机 RealVNC 冲突。仅有 `-no6` / `-noipv6` 仍不足以阻止该实际行为，最终在原有参数之外增加 `-rfbportv6 -1`。修复后已实际检查：Hermes x11vnc 只监听 `127.0.0.1:5999`，宿主机 RealVNC 独占 IPv4/IPv6 `5900`。
+- **noVNC 根地址显示目录列表**：websockify 直接暴露 `/usr/share/novnc` 时，访问根地址可能得到 `Directory listing for /`。当前仅在上游不存在 `index.html` 时创建 `index.html -> vnc.html`，既保证根地址直接进入客户端，也不覆盖以后上游可能提供的入口文件。
+- **noVNC 密码来源容易误判**：noVNC 没有第二套独立密码；最终认证仍由 x11vnc 完成，统一使用 `VNC_PASSWORD`。不要再额外维护 noVNC 密码变量。
+- **VNC / noVNC 剪贴板偶发失效或中文乱码**：两者最终都经过 x11vnc 剪贴板同步链路，noVNC 还多一层浏览器/WebSocket。该问题不是缺少 `zh_CN.UTF-8`。已评估 TigerVNC `x0vncserver`，但现有 RDP/VNC/noVNC 主链路可用，因此把该项保留为已知限制，不为单一剪贴板问题替换整个 VNC 后端。
+- **RDP 有画面但没有声音**：仅安装 `pulseaudio` 不会产生 RDP 音频重定向。需要 `pulseaudio-module-xrdp` 的 `module-xrdp-sink` / `module-xrdp-source`，并且当前 Openbox 不是完整 Xfce 会话，不能假设 XDG Autostart 一定加载模块，所以 `/etc/xrdp/startwm.sh` 显式执行官方加载脚本。
+- **xrdp 会话 socket 权限问题**：容器没有 systemd 代替 Debian 服务做初始化时，必须显式执行 `/usr/share/xrdp/socksetup`；同时 `SessionSockdirGroup` 使用 `xrdp`，否则可能出现 `Error connecting to user session` 一类连接失败。
+- **RDP 共享目录不是普通宿主机挂载**：目录重定向依赖 `chansrv + FUSE`，容器需要 `SYS_ADMIN` 和 `/dev/fuse`。`/opt/data/thinclient_drives/` 是用户会话内的 FUSE 挂载，因此 `docker exec` 直接访问遇到权限问题不能单独作为共享失败依据，应以 RDP 会话内能否正常访问为准。
+- **桌面图标与“所有应用图标”不是一回事**：xfdesktop 只显示桌面目录文件和特殊图标，不会自动把 `/usr/share/applications` 全部复制到桌面。应用入口使用 `xfce4-appfinder`，并只做一次性“应用程序”桌面启动器初始化，避免用户删除后又被反复写回。
+- **xfdesktop 特殊图标点了没反应**：桌面“主文件夹 / 文件系统 / 回收站 / 设备”等入口需要 Xfce FileManager helper。当前保留 Konqueror 作为 `Super+E` 主文件管理入口，同时安装 Thunar 并只把 `FileManager=thunar` 用于 xfdesktop/Xfce helper，不能再把两者职责混为一处。
+- **桌面右键终端报 `TerminalEmulator` 不存在**：仅有 Openbox 或通用 xterm 不够，xfdesktop 会调用 Xfce helper。当前显式安装 `xfce4-terminal`，并在缺失时初始化 `TerminalEmulator=xfce4-terminal`；只迁移本镜像曾经写入的旧默认值，不覆盖用户自己的终端选择。
+- **深色主题导致图标难辨认**：GTK 主题、Openbox 窗口主题和图标主题必须分开。界面使用深色时仍单独保留彩色 Adwaita / AdwaitaLegacy / Breeze / LXDE 图标资源，避免把应用和菜单图标一起切成黑色 symbolic 图标。
+- **多个桌面/文件管理组件职责冲突**：PCManFM 已从桌面链路移除；Openbox 负责窗口管理，tint2 负责面板，xfdesktop 负责桌面层，Konqueror 负责主文件管理入口，Thunar 只承担 xfdesktop/Xfce helper 所需职责。不要再同时引入新的桌面管理器去争用根窗口。
+- **`API_SERVER_KEY` 双份配置会增加排障复杂度**：当前只以 `/opt/data/.env` 作为 Key 的唯一来源，不在 Compose 项目 `.env` 和 `docker-compose.yml` 中重复传入同名变量。监听地址、端口、启用状态仍可由 Compose 项目 `.env` 管理，但 Key 不再维护两份。
+- **持久化目录中的用户配置不能每次启动强制覆盖**：`HOME=/opt/data` 是稳定基线。启动脚本只初始化缺失项、迁移本镜像明确写入过的旧默认值；用户已经修改的 Openbox、GTK、Xfce 等配置保持不动。
+- **README 文档提交不应浪费 Actions**：workflow 的 push 路径不包含 `README.md`，因此单独补充文档不会重新构建镜像；真正影响镜像的 `Dockerfile`、`docker/**` 等修改才触发构建。镜像继续只维护 `latest`，不创建日期标签、SHA 标签、Artifact 或 Release。
+
 ## 设计取舍与已处理问题
 
 - 当前不是完整 Xfce 桌面。窗口管理器固定为 Openbox，面板固定为 tint2，只借用 `xfdesktop`、Thunar helper、`xfce4-terminal` 和 `xfce4-appfinder` 完成桌面集成；不引入 `xfce4-panel`，避免和 tint2 重复。
