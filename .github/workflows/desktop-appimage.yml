@@ -75,7 +75,7 @@ jobs:
 
           if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}" \
             && grep -Fqx "BUILD_REVISION=${BUILD_REVISION}" <<<"${current_body}" \
-            && grep -Fqx 'Hermes-Desktop-linux-x86_64.AppImage' <<<"${current_assets}"; then
+            && grep -Eqx 'Hermes-Desktop-linux-x86_64\.AppImage|hermes-desktop\.AppImage' <<<"${current_assets}"; then
             echo "build=false" >> "${GITHUB_OUTPUT}"
             echo "上游版本、构建修订和现有 AppImage 均未变化：跳过构建。"
           else
@@ -94,6 +94,17 @@ jobs:
           gh release edit desktop-latest \
             --repo "${GITHUB_REPOSITORY}" \
             --title 'Hermes Desktop AppImage (latest)'
+
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/desktop-latest")"
+          old_asset_id="$(jq -r '.assets[]? | select(.name == "Hermes-Desktop-linux-x86_64.AppImage") | .id' <<<"${release_json}" | head -n 1)"
+          new_asset_id="$(jq -r '.assets[]? | select(.name == "hermes-desktop.AppImage") | .id' <<<"${release_json}" | head -n 1)"
+
+          if [[ -n "${old_asset_id}" && -z "${new_asset_id}" ]]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${old_asset_id}" \
+              -f name='hermes-desktop.AppImage' >/dev/null
+            echo "已将 Release 资产重命名为 hermes-desktop.AppImage。"
+          fi
 
       - name: Checkout upstream source
         if: steps.gate.outputs.build == 'true'
@@ -434,7 +445,7 @@ jobs:
           fi
 
           mkdir -p dist
-          asset="dist/Hermes-Desktop-linux-x86_64.AppImage"
+          asset="dist/hermes-desktop.AppImage"
           install -m 0755 "${appimages[0]}" "${asset}"
 
           test -s "${asset}"

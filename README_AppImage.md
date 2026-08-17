@@ -11,7 +11,7 @@ https://github.com/newyorkthink/hermes-agent/releases/tag/desktop-latest
 当前文件名：
 
 ```text
-Hermes-Desktop-linux-x86_64.AppImage
+hermes-desktop.AppImage
 ```
 
 ### 2. 生成 Dashboard Session Token
@@ -64,7 +64,7 @@ docker compose up -d
 
 ```bash
 # 在 Linux 终端启动 Hermes Desktop AppImage
-./Hermes-Desktop-linux-x86_64.AppImage
+./hermes-desktop.AppImage
 ```
 
 ### 7. Hermes Desktop 中填写
@@ -239,7 +239,7 @@ curl http://127.0.0.1:8642/v1/chat/completions \
 
 - 每天检查一次 `NousResearch/hermes-agent` 最新稳定 Release。
 - 上游版本和 AppImage 构建修订没有变化时跳过完整构建。
-- 只发布 `Hermes-Desktop-linux-x86_64.AppImage`。
+- 只发布 `hermes-desktop.AppImage`。
 - Release 固定使用 `desktop-latest`，标题固定为 `Hermes Desktop AppImage (latest)`。
 - 不使用日期标题，不保存 Actions Artifact。
 - 最终 AppImage 实际运行 smoke test 通过后才覆盖 `desktop-latest`。
