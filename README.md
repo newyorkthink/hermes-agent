@@ -212,7 +212,7 @@ VNC_DISPLAY=:99
 VNC_GEOMETRY=1920x1080
 ```
 
-VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 同时使用 `-no6` 和 `-noipv6`，关闭编译时默认的 IPv6 listener 以及其他 IPv6 socket，避免在 host 网络模式下额外占用默认 VNC 端口。
+VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 使用配置的 `VNC_PORT` 作为 IPv4 RFB 端口，并同时设置 `-rfbportv6 -1`、`-no6` 和 `-noipv6`，显式关闭 IPv6 RFB 端口、编译时默认的 IPv6 listener 以及其他 IPv6 socket。这样在 `network_mode: host` 下，即使把 `VNC_PORT` 改为 `5999`，也不会再额外占用宿主机 `[::]:5900` 与 RealVNC 等其他 VNC 服务冲突。
 
 noVNC 由 websockify 提供静态网页和 WebSocket 转发。当前启动脚本仅在 `/usr/share/novnc/index.html` 不存在时创建指向 `vnc.html` 的符号链接，因此直接访问 noVNC 根地址即可进入客户端，不再显示静态目录列表；如果上游以后自带 `index.html`，则保留上游文件。
 
@@ -258,6 +258,12 @@ docker run -d \
 ### noVNC 是否有单独密码
 
 没有。noVNC 只是网页客户端和 WebSocket 转发层，认证继续使用 `VNC_PASSWORD`。
+
+### `VNC_PORT` 已改为 `5999`，为什么之前仍会占用 `5900`
+
+之前的启动参数已经把 IPv4 RFB 端口设为 `VNC_PORT`，并使用 `-no6` / `-noipv6`，但当前 x11vnc / LibVNCServer 组合仍曾实际创建额外的 IPv6 RFB listener `[::]:5900`。由于 Docker 使用 `network_mode: host`，这个 listener 会直接占用宿主机 `5900`，从而使宿主机 RealVNC Server 报端口冲突。
+
+当前启动脚本在原有参数之外增加 `-rfbportv6 -1`，明确禁用 IPv6 RFB 端口。`VNC_PORT=5999` 时，x11vnc 只保留配置的 IPv4 `5999`，不再额外占用宿主机 `5900`；不需要修改 RealVNC 的端口。
 
 ### VNC / noVNC 复制粘贴为什么有时无效，中文为什么可能乱码
 
@@ -342,7 +348,7 @@ XMODIFIERS=@im=fcitx
 - `HOME=/opt/data` 是 RDP/VNC 的统一持久化基线。启动脚本只初始化缺失值和迁移本镜像明确写入过的旧默认值，不覆盖已有用户选择。
 - GTK 深色主题、Openbox 窗口主题和图标主题分离处理，避免深色界面把应用和菜单图标一起替换成难辨认的黑色 symbolic 图标。
 - RDP 与 VNC 使用同一套桌面组件，但不是同一个显示会话：RDP 是 xorgxrdp 创建的 Xorg 会话，VNC 是独立 Xvfb `:99` 会话。
-- x11vnc 之前仅使用 `-noipv6` 时仍可能出现额外 IPv6 listener；在 `network_mode: host` 下会直接占用宿主机端口。当前同时使用 `-no6` 和 `-noipv6`，避免默认 5900 与宿主机其他 VNC 服务冲突。
+- x11vnc 在当前 LibVNCServer 组合下，即使 IPv4 已按 `VNC_PORT` 监听并同时设置 `-no6` / `-noipv6`，仍曾实际出现额外的 `[::]:5900` IPv6 RFB listener；在 `network_mode: host` 下会直接抢占宿主机 `5900`。当前额外设置 `-rfbportv6 -1`，明确关闭 IPv6 RFB 端口，使自定义 `VNC_PORT` 与宿主机 RealVNC 等其他 VNC 服务保持端口隔离。
 - noVNC 没有独立密码，统一使用 `VNC_PASSWORD`；根地址通过 `index.html -> vnc.html` 直接进入客户端，不再暴露静态目录列表。
 - 直接 VNC 和 noVNC 的剪贴板都依赖 x11vnc，偶发复制/粘贴失效以及 noVNC 中文乱码作为已知兼容性限制保留。当前 RDP、VNC、noVNC 均可正常作为远程桌面使用，因此不为该单一问题替换 x11vnc 或切换到 TigerVNC/x0vncserver，避免破坏现有稳定架构。
 - RDP 音频保留现有 PulseAudio 架构，只补官方 `pulseaudio-module-xrdp` v0.8，不切换 PipeWire。模块在独立构建阶段按当前 PulseAudio 版本编译，最终镜像只复制运行时模块和加载脚本；Openbox 会话显式加载模块，不依赖完整桌面环境的 XDG Autostart。
