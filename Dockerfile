@@ -66,6 +66,17 @@ RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd6
     rm -f /tmp/chrome.deb && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
+# 使用带图标的 Openbox 菜单；保留 Debian 原始菜单作为已有用户配置迁移基线。
+RUN install -D -m 0644 /etc/xdg/openbox/menu.xml /usr/local/share/hermes/openbox-menu.debian.xml
+COPY --chmod=0755 docker/openbox/hermes-openbox-app-menu /usr/local/bin/hermes-openbox-app-menu
+COPY docker/openbox/menu.xml /etc/xdg/openbox/menu.xml
+RUN update-menus && \
+    test -f /var/lib/openbox/debian-menu.xml && \
+    /usr/local/bin/hermes-openbox-app-menu --patch-debian-menu && \
+    /usr/local/bin/hermes-openbox-app-menu > /tmp/hermes-openbox-app-menu.xml && \
+    python3 -c 'import os, xml.etree.ElementTree as ET; paths=["/etc/xdg/openbox/menu.xml","/var/lib/openbox/debian-menu.xml","/tmp/hermes-openbox-app-menu.xml"]; roots=[ET.parse(p).getroot() for p in paths]; nodes=[n for root in roots for n in root.iter() if n.tag.rsplit("}",1)[-1] in {"menu","item"} and n.get("id") != "root-menu"]; assert nodes and all(n.get("icon") and os.path.isfile(n.get("icon")) for n in nodes)' && \
+    rm -f /tmp/hermes-openbox-app-menu.xml
+
 # xrdp 使用标准 Xorg 会话；桌面保持 Openbox + tint2，文件管理器使用 Konqueror。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
 
@@ -85,6 +96,8 @@ RUN command -v xrdp >/dev/null && \
     command -v websockify >/dev/null && \
     command -v openbox >/dev/null && \
     command -v tint2 >/dev/null && \
+    command -v python3 >/dev/null && \
+    test -x /usr/local/bin/hermes-openbox-app-menu && \
     command -v konqueror >/dev/null && \
     command -v kfmclient >/dev/null && \
     command -v firefox-esr >/dev/null && \
