@@ -11,7 +11,7 @@
 - 浏览器：`google-chrome-stable`、`firefox-esr`
 - 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`xfce4-appfinder`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
-- RDP 音频：`pulseaudio` + 官方 `pulseaudio-module-xrdp` v0.8；模块在独立构建阶段编译后复制到最终镜像，不把编译依赖带入运行环境
+- RDP 音频：`pipewire` + `pipewire-pulse` + `wireplumber` + Debian `pipewire-module-xrdp`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
 - 字体与图标：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
@@ -19,7 +19,7 @@
 - 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`、`netcat-openbsd`、`whois`
 - 加密与证书工具：`openssl`、`gnupg`
 - 开发与底层依赖：`build-essential`、`pkg-config`、`libssl-dev`、`libffi-dev`、`libxml2-dev`、`libxslt1-dev`、`libjpeg-dev`、`libpng-dev`、`libwebp-dev`、`libmagic-dev`、`sqlite3`、`libsqlite3-dev`
-- 桌面运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`xdg-user-dirs`、`libglib2.0-bin`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
+- 桌面运行基础：`sudo`、`pulseaudio-utils`、`desktop-file-utils`、`xdg-utils`、`xdg-user-dirs`、`libglib2.0-bin`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
 - 基础环境：`locales`、`ca-certificates`、`tzdata`
 
 仓库中不保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
@@ -242,17 +242,30 @@ RDP 使用 xorgxrdp 创建独立 Xorg 会话。xrdp 守护进程以 `xrdp` 用�
 
 ### RDP 音频
 
-仅安装 `pulseaudio` 不会自动获得 RDP 音频重定向。当前镜像额外使用官方 `pulseaudio-module-xrdp` v0.8，提供 `module-xrdp-sink` 和 `module-xrdp-source`，让 xrdp 通过 RDP 音频虚拟通道把容器内声音发送到客户端。
-
-音频模块在独立 Docker 构建阶段针对当前 Debian PulseAudio 源码编译，再复制到最终镜像；构建时会核对编译阶段和最终镜像的 PulseAudio Debian 包版本，避免内部模块 API 版本不匹配。最终镜像不保留该模块的编译依赖。
-
-当前 Openbox 会话不是完整 Xfce 会话，不会依赖完整桌面环境自动执行 XDG Autostart。因此 `/etc/xrdp/startwm.sh` 会显式调用：
+当前镜像使用 Debian 的 `pipewire-module-xrdp`。每个 xorgxrdp 会话会启动独立的 `pipewire`、`wireplumber` 和 `pipewire-pulse`，再由 `/etc/xrdp/startwm.sh` 显式调用：
 
 ```text
-/usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh
+/usr/libexec/pipewire-module-xrdp/load_pw_modules.sh
 ```
 
-加载失败只影响 RDP 音频，不阻断桌面登录。客户端侧仍需启用 RDP 音频输出；VNC/noVNC 当前不提供音频重定向。
+脚本等待当前显示号对应的 `xrdp_chansrv_audio_out_socket_*`，加载 `libpipewire-module-xrdp.so`，并确认 `xrdp-sink` 已成为默认且未静音的输出。加载失败只影响 RDP 音频，不阻断桌面登录；VNC/noVNC 当前不提供音频重定向。
+
+客户端必须在建立连接前启用本地音频。FreeRDP 命令行使用：
+
+```text
+/sound:sys:pulse
+```
+
+Remmina 的设置按连接条目分别保存；Windows 虚拟机条目有声音，不代表 Hermes 条目继承了同样参数。编辑 Hermes 的 RDP 条目，在“高级”中同时设置：
+
+```text
+声音 / Audio output mode = 本地 / Local
+重定向本地音频输出 / Redirect local audio output = sys:pulse
+```
+
+第二项不能省略：它让 Remmina 明确使用 Pulse 后端并注册 `rdpsnd`，与可用的 `/sound:sys:pulse` 命令行行为一致。保存后必须彻底断开再重新连接，因为 RDP 音频虚拟通道只在建连时协商。
+
+若同一地址的 xfreerdp 使用 `/sound:sys:pulse` 已有声音，则服务端、浏览器到 `xrdp-sink` 以及 xrdp 输出链路已经成立；不要继续重建 Hermes 音频栈，应先修正该 Remmina 连接条目的 `audio-output`。
 
 ### RDP 共享目录
 
@@ -356,7 +369,7 @@ docker run -d \
 
 ### RDP 播放视频为什么没有声音
 
-旧镜像只有 `pulseaudio`，没有 xrdp 专用 PulseAudio 模块，因此浏览器或播放器可以正常播放画面，但声音不会通过 RDP 返回客户端。当前镜像加入官方 `pulseaudio-module-xrdp` v0.8，并在 Openbox RDP 会话启动时显式加载 `module-xrdp-sink` / `module-xrdp-source`。客户端仍需启用 RDP 音频输出。
+当前镜像已通过 `pipewire-module-xrdp` 提供 `xrdp-sink` / `xrdp-source`。若 xfreerdp 使用 `/sound:sys:pulse` 有声音而 Remmina 没有，问题在 Remmina 的独立连接条目：除“声音 = 本地”外，还要把“重定向本地音频输出”设为 `sys:pulse`，然后完全断开并重连。Windows RDP 条目的设置不会自动复制到 Hermes 条目。
 
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
@@ -430,7 +443,7 @@ XMODIFIERS=@im=fcitx
 - **noVNC 根地址显示目录列表**：websockify 直接暴露 `/usr/share/novnc` 时，访问根地址可能得到 `Directory listing for /`。当前仅在上游不存在 `index.html` 时创建 `index.html -> vnc.html`，既保证根地址直接进入客户端，也不覆盖以后上游可能提供的入口文件。
 - **noVNC 密码来源容易误判**：noVNC 没有第二套独立密码；最终认证仍由 x11vnc 完成，统一使用 `VNC_PASSWORD`。不要再额外维护 noVNC 密码变量。
 - **VNC / noVNC 剪贴板偶发失效或中文乱码**：两者最终都经过 x11vnc 剪贴板同步链路，noVNC 还多一层浏览器/WebSocket。该问题不是缺少 `zh_CN.UTF-8`。已评估 TigerVNC `x0vncserver`，但现有 RDP/VNC/noVNC 主链路可用，因此把该项保留为已知限制，不为单一剪贴板问题替换整个 VNC 后端。
-- **RDP 有画面但没有声音**：仅安装 `pulseaudio` 不会产生 RDP 音频重定向。需要 `pulseaudio-module-xrdp` 的 `module-xrdp-sink` / `module-xrdp-source`，并且当前 Openbox 不是完整 Xfce 会话，不能假设 XDG Autostart 一定加载模块，所以 `/etc/xrdp/startwm.sh` 显式执行官方加载脚本。
+- **RDP 有画面但没有声音**：服务端使用 `pipewire-module-xrdp`，并由 `/etc/xrdp/startwm.sh` 显式启动 PipeWire 会话和加载 xrdp 模块。若同一服务端的 xfreerdp `/sound:sys:pulse` 已有声音，不应再替换服务端音频架构；Remmina 的 Hermes 条目必须同时设置“声音 = 本地”和 `audio-output=sys:pulse`，并在保存后重连。
 - **xrdp 会话 socket 权限问题**：容器没有 systemd 代替 Debian 服务做初始化时，必须显式执行 `/usr/share/xrdp/socksetup`；同时 `SessionSockdirGroup` 使用 `xrdp`，否则可能出现 `Error connecting to user session` 一类连接失败。
 - **RDP 共享目录不是普通宿主机挂载**：目录重定向依赖 `chansrv + FUSE`，容器需要 `SYS_ADMIN` 和 `/dev/fuse`。`/opt/data/thinclient_drives/` 是用户会话内的 FUSE 挂载，因此 `docker exec` 直接访问遇到权限问题不能单独作为共享失败依据，应以 RDP 会话内能否正常访问为准。
 - **桌面图标与“所有应用图标”不是一回事**：xfdesktop 只显示桌面目录文件和特殊图标，不会自动把 `/usr/share/applications` 全部复制到桌面。应用入口使用 `xfce4-appfinder`，并只做一次性“应用程序”桌面启动器初始化，避免用户删除后又被反复写回。
@@ -454,7 +467,7 @@ XMODIFIERS=@im=fcitx
 - x11vnc 在当前 LibVNCServer 组合下，即使 IPv4 已按 `VNC_PORT` 监听并同时设置 `-no6` / `-noipv6`，仍曾实际出现额外的 `[::]:5900` IPv6 RFB listener；在 `network_mode: host` 下会直接抢占宿主机 `5900`。当前额外设置 `-rfbportv6 -1`，明确关闭 IPv6 RFB 端口，使自定义 `VNC_PORT` 与宿主机 RealVNC 等其他 VNC 服务保持端口隔离。
 - noVNC 没有独立密码，统一使用 `VNC_PASSWORD`；根地址通过 `index.html -> vnc.html` 直接进入客户端，不再暴露静态目录列表。
 - 直接 VNC 和 noVNC 的剪贴板都依赖 x11vnc，偶发复制/粘贴失效以及 noVNC 中文乱码作为已知兼容性限制保留。当前 RDP、VNC、noVNC 均可正常作为远程桌面使用，因此不为该单一问题替换 x11vnc 或切换到 TigerVNC/x0vncserver，避免破坏现有稳定架构。
-- RDP 音频保留现有 PulseAudio 架构，只补官方 `pulseaudio-module-xrdp` v0.8，不切换 PipeWire。模块在独立构建阶段按当前 PulseAudio 版本编译，最终镜像只复制运行时模块和加载脚本；Openbox 会话显式加载模块，不依赖完整桌面环境的 XDG Autostart。
+- RDP 音频使用 Debian `pipewire-module-xrdp`，每个 xorgxrdp 会话显式启动 `pipewire`、`wireplumber`、`pipewire-pulse` 并加载 xrdp 模块，不依赖完整桌面环境的 XDG Autostart。
 - `xdg-user-dirs` 负责桌面目录本地化，脚本通过 `xdg-user-dir DESKTOP` 获取实际路径，不写死英文 `~/Desktop`。
 - 桌面启动器只做一次性初始化。这样既能给首次使用者一个可点击的应用入口，又不会在用户后续主动删除或自定义桌面后反复写回。
 
@@ -463,7 +476,7 @@ XMODIFIERS=@im=fcitx
 Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令缺失都会直接使构建失败：
 
 - xrdp / Xorg / Xvfb / x11vnc / noVNC
-- PulseAudio / `module-xrdp-sink` / `module-xrdp-source` / xrdp 音频加载脚本，以及构建阶段与最终镜像 PulseAudio 包版本一致性
+- PipeWire / WirePlumber / PipeWire-Pulse / `libpipewire-module-xrdp.so` / xrdp 音频加载脚本
 - Openbox / tint2 / xfdesktop
 - `xfce4-appfinder`、`xdg-user-dirs`、`gio`
 - Thunar、Xfce FileManager helper、`xfce4-terminal`
