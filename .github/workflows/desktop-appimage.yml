@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 env:
-  DESKTOP_BUILD_REVISION: '3'
+  DESKTOP_BUILD_REVISION: '4'
 
 jobs:
   build:
@@ -344,6 +344,82 @@ jobs:
               context_text = context_text.replace(old_locale_line, new_locale_line, 1)
               context_path.write_text(context_text, encoding="utf-8")
 
+          preload_path = Path("apps/desktop/electron/preload.ts")
+          preload_text = preload_path.read_text(encoding="utf-8")
+          update_bridge_marker = "Hermes standalone Linux AppImage: disable source-checkout desktop self-update"
+
+          if update_bridge_marker not in preload_text:
+              old_update_bridge = r'''  updates: {
+            check: () => ipcRenderer.invoke('hermes:updates:check'),
+            apply: opts => ipcRenderer.invoke('hermes:updates:apply', opts),
+            getBranch: () => ipcRenderer.invoke('hermes:updates:branch:get'),
+            setBranch: name => ipcRenderer.invoke('hermes:updates:branch:set', name),
+          '''
+              new_update_bridge = r'''  updates: {
+            // Hermes standalone Linux AppImage: disable source-checkout desktop self-update.
+            // AppImage updates are distributed through the repository's desktop-latest Release.
+            check: () => Promise.resolve(null),
+            apply: _opts =>
+              Promise.resolve({
+                ok: false,
+                error: 'unavailable',
+                message: 'Desktop self-update is disabled for this standalone AppImage.'
+              }),
+            getBranch: () => Promise.resolve(null),
+            setBranch: _name => Promise.resolve(null),
+          '''
+              if preload_text.count(old_update_bridge) != 1:
+                  raise SystemExit("无法唯一定位 Desktop update preload bridge，停止构建，避免错误修改上游源码。")
+              preload_text = preload_text.replace(old_update_bridge, new_update_bridge, 1)
+              preload_path.write_text(preload_text, encoding="utf-8")
+
+          about_path = Path("apps/desktop/src/app/settings/about-settings.tsx")
+          about_text = about_path.read_text(encoding="utf-8")
+          about_marker = "Hermes standalone Linux AppImage: hide source-checkout desktop update controls"
+
+          if about_marker not in about_text:
+              version_anchor = r'''          <p className="mt-1 text-xs text-muted-foreground">
+            {version?.appVersion ? a.version(version.appVersion) : a.versionUnavailable}
+          </p>
+          '''
+              release_notes_button = r'''          <Button asChild className="mt-1" size="sm" variant="text">
+            <a
+              href={RELEASE_NOTES_URL}
+              onClick={event => {
+                event.preventDefault()
+                void window.hermesDesktop?.openExternal?.(RELEASE_NOTES_URL)
+              }}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLink className="size-3" />
+              {a.releaseNotes}
+            </a>
+          </Button>
+          '''
+              if about_text.count(version_anchor) != 1:
+                  raise SystemExit("无法唯一定位 About 版本信息，停止构建，避免错误修改上游源码。")
+              about_text = about_text.replace(version_anchor, version_anchor + release_notes_button, 1)
+
+              updates_open = '        <SectionHeading icon={RefreshCw} title={a.updates} />\n'
+              updates_close = r'''        <ListRow
+          description={a.automaticUpdatesDesc}
+          hint={a.branchCommit(status?.branch ?? 'unknown', status?.currentSha?.slice(0, 7) ?? 'unknown')}
+          title={a.automaticUpdates}
+        />
+          '''
+              if about_text.count(updates_open) != 1 or about_text.count(updates_close) != 1:
+                  raise SystemExit("无法唯一定位 About 更新区域，停止构建，避免错误修改上游源码。")
+              about_text = about_text.replace(
+                  updates_open,
+                  '        {/* Hermes standalone Linux AppImage: hide source-checkout desktop update controls. */}\n'
+                  '        <div className="hidden">\n'
+                  + updates_open,
+                  1,
+              )
+              about_text = about_text.replace(updates_close, updates_close + '        </div>\n', 1)
+              about_path.write_text(about_text, encoding="utf-8")
+
           package_path = Path("apps/desktop/package.json")
           package_data = json.loads(package_path.read_text(encoding="utf-8"))
           extra_resources = package_data.setdefault("build", {}).setdefault("extraResources", [])
@@ -414,6 +490,10 @@ jobs:
             apps/desktop/src/main.tsx
           grep -Fq 'configuredLocale == null ? normalizeLocale(initialLocale)' \
             apps/desktop/src/i18n/context.tsx
+          grep -Fq 'Hermes standalone Linux AppImage: disable source-checkout desktop self-update' \
+            apps/desktop/electron/preload.ts
+          grep -Fq 'Hermes standalone Linux AppImage: hide source-checkout desktop update controls' \
+            apps/desktop/src/app/settings/about-settings.tsx
           grep -Fq '"to": "linux-libs/libsecret-1.so.0"' \
             apps/desktop/package.json
           grep -Fq 'Hermes standalone Linux AppImage: add the bundled libsecret directory to Electron RUNPATH' \
