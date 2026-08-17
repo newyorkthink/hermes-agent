@@ -282,6 +282,8 @@ Remmina 的设置按连接条目分别保存；Windows 虚拟机条目有声音�
 | Hermes Desktop 按键录音 | Desktop 客户端麦克风 → `/api/audio/transcribe` → 后端 STT | 镜像已安装 `faster-whisper==1.2.1`；不依赖 Wake word 的 PortAudio 输入流 |
 | Wake word（`hey hermes`） | Python 后端 `sounddevice` → PortAudio 输入设备 | 镜像已安装上游固定的默认 openWakeWord 依赖和 `libportaudio2`；后端进程仍必须实际看得到可用麦克风输入 |
 
+当前镜像安装的是 `onnxruntime==1.27.0`，不是 `onnxruntime-gpu`，因此 Wake word ONNX 推理没有 `CUDAExecutionProvider`，实际使用 CPU。Compose 把 NVIDIA GPU 透传给容器只表示 GPU 可供支持 CUDA 的程序使用，不会自动把 openWakeWord 切换到 NVIDIA；宿主机监控中少量 NVIDIA 占用也不能据此归因于 Wake word。
+
 后台提示：
 
 ```text
@@ -430,6 +432,10 @@ docker run -d \
 
 这不是插件、RDP 音频或麦克风设备错误，而是 `openwakeword==0.6.0` 安装包未自带共享 ONNX 特征模型。运行时下载会写入 root 所有的 `.venv/site-packages`，但 Docker 后端实际以 `hermes` 用户运行，因此模型仍不存在。当前 Dockerfile 已在构建期下载共享模型，并以 `hermes` 用户实际加载一次 `hey_hermes.onnx`；构建通过后不需要运行时下载，也不要放宽整个 Python 环境的写权限。
 
+### Docker 已透传 NVIDIA，为什么 Wake word 仍有 CPU 占用
+
+GPU 透传与具体程序选择的推理后端是两件事。当前 openWakeWord 使用 CPU 版 ONNX Runtime，没有 CUDA 执行后端；持续监听时出现一定 CPU 占用属于音频采集和分帧推理，不需要修改已经稳定的 NVIDIA、RDP 或 AppImage 配置。
+
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
 这是 xfdesktop 的正常行为：它显示实际桌面目录中的文件/启动器和启用的特殊图标，不会把 `/usr/share/applications` 全部复制到桌面。
@@ -493,6 +499,24 @@ XMODIFIERS=@im=fcitx
 ```
 
 并启动 `fcitx5`。构建阶段还会检查 GTK3 输入模块、拼音模块、拼音配置和 Fcitx5 图标资源。
+
+### 容器日志出现多条 `WARNING` / `ERROR`，是否需要继续修复
+
+应结合发生时机判断，不能只按日志级别判断服务失败。当前实际日志中的常见项目如下：
+
+| 日志特征 | 当前判定 |
+| --- | --- |
+| `GVFS-UDisks2`、`Failed to get system bus`、`pam_systemd ... No such file` | 容器没有完整 systemd / UDisks；只影响可移动设备自动发现，不阻断桌面、文件管理器或 RDP |
+| `libEGL ... /dev/dri/card0: Permission denied`、`rdpPreInit: /dev/dri/renderD128 open failed` | Xvfb / xorgxrdp 没有直接使用宿主机 DRM 渲染节点，当前远程桌面回退到软件渲染；画面正常时不要为消除提示扩大设备权限 |
+| ONNX Runtime `Failed to detect devices under /sys/class/drm/card*` | CPU 版 ONNX Runtime 枚举到不可访问的 DRM 条目；Wake word 已使用 CPU 后端，不表示模型加载失败 |
+| `tint2: pixmap background detection failed`、`Unable to acquire bus name 'org.xfce.Thunar'`、`SESSION_MANAGER ... not defined` | 轻量 Openbox 会话的面板探测、并发 D-Bus 激活或无传统会话管理器提示；桌面、面板和文件管理器可用时不处理 |
+| Firefox `glxtest: libpci missing` | Firefox 在远程软件渲染会话中的可选 GPU 探测提示；浏览器正常打开和播放时不为此改变稳定桌面链路 |
+| `rdpClientConRecv ... returned 0`、`trans_check_wait_objs failed for ECP transport` | RDP 客户端断开、重连或容器停止时产生的通道结束日志；随后能重连，或容器以 `code 0` 退出时不是持续故障 |
+| `Shutdown context: signal=SIGTERM`、`s6rc-oneshot-runner ... essential` | `docker compose` 重新创建或停止容器时的正常受监督关闭日志；`exited with code 0` 表示正常结束 |
+| `No env user allowlists configured` | 仅在启用 Telegram 等外部消息平台时需要配置允许用户；本机 Dashboard、RDP、VNC 和 API 使用不受影响 |
+| `Interrupted during API call` | 当前请求被用户中断、客户端断开或容器停止；只有在没有任何断开操作仍持续出现时才需要单独排查 |
+
+以上提示不能通过把 Fontconfig、libnotify 或更多桌面守护进程塞进 Docker/AppImage 统一消除。判断稳定性的依据是容器持续运行、Dashboard 可连接、RDP/VNC 可重连、实际功能正常，以及停止或重建时最终 `exited with code 0`。
 
 ## 踩坑记录
 

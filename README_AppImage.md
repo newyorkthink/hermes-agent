@@ -110,6 +110,18 @@ AppImage 基于 `NousResearch/hermes-agent` 对应最新稳定 Release 的官方
 
 不会把 Gateway URL、Session Token、API Key、固定 IP 或个人当前端口写进 AppImage。
 
+## 已处理问题与稳定基线
+
+| 曾出现的情况 | 根因 | 当前处理 |
+| --- | --- | --- |
+| 直接启动 AppImage 时没有正确选择 KeePassXC / Keyring 后端 | standalone AppImage 不经过上游 Python Desktop 启动器 | 在 Electron 主进程内按上游顺序探测 KeePassXC Secret Service、GNOME Keyring 和 KWallet |
+| 已识别 `gnome-libsecret`，但 `safeStorage` 仍不可用 | 部分宿主机没有 Chromium 动态加载所需的 `libsecret-1.so.0` | AppImage 内置该库，并给 Electron 主程序加入只指向内置目录的 RUNPATH |
+| 中文 Linux 环境首次打开仍显示英文 | Chromium locale 与 Hermes 初始 `display.language` 加载顺序不一致 | 把 `zh_CN` 等中文 locale 映射为 `zh-CN`；用户明确设置的 `display.language` 仍优先 |
+| CI Runner 不支持 FUSE 时无法直接挂载 AppImage | AppImage 运行时挂载条件不稳定 | smoke test 使用最终文件的 `--appimage-extract-and-run`，不依赖 FUSE |
+| Release 名称、文件名或历史产物容易累积 | 每次构建创建新 Release / Artifact | 固定覆盖 `desktop-latest`，只保留一个 AppImage，不上传 Actions Artifact |
+
+发布前会同时检查 AppImage 结构、`zh-CN.pak`、内置 `libsecret-1.so.0`、Electron RUNPATH、实际 `gnome_libsecret` 后端和加密/解密往返。Wake word 的 PortAudio、Python 依赖和 ONNX 模型属于 Docker 后端，不通过向 AppImage 增加同名 Python 包解决。
+
 ## Keyring / KeePassXC
 
 Hermes Desktop 使用 Electron `safeStorage` 保存 Gateway Token。
@@ -144,6 +156,10 @@ org.freedesktop.DBus.Error.ServiceUnknown ... org.freedesktop.Notifications
 ```
 
 Fontconfig 提示表示宿主机现有字体缓存由更高版本生成，AppImage 内较低版本不会重写该缓存；IBus、systemd scope 和 Electron deprecation 提示不阻断窗口、Gateway 或音频。`libnotify` / `org.freedesktop.Notifications` 表示当前 i3wm 桌面会话没有已注册的通知服务，只会使 Hermes 桌面通知无法显示。
+
+当前发布成品已解包检查，`usr/lib/libnotify.so.4` 已经存在。`libnotify-WARNING ... Failed to connect to proxy` 本身也说明 libnotify 客户端库已经加载；缺少的是宿主机 D-Bus 上的 `org.freedesktop.Notifications` 通知服务。再次打包 libnotify 不能提供通知守护进程，也不能消除该提示。
+
+Fontconfig 提示同样不是“找不到 Fontconfig”。它表示运行中的字体组件读取到了由更新版本生成的宿主机缓存；重复打包 Fontconfig 不能保证与以后每台宿主机的缓存版本一致，反而可能引入底层字体库冲突。当前字体和中文界面正常时不改 AppImage，也不需要为这条提示重新构建。
 
 这些本机 AppImage 提示与 Docker 后端的 `openwakeword/resources/models/*.onnx` 缺失无关；后者必须由后端镜像补齐，不能通过修改 AppImage、Keyring 或 RDP 音频设置解决。
 
