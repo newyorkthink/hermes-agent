@@ -13,7 +13,7 @@
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
-- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`breeze-icon-theme`、`lxde-icon-theme`
+- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
 - 常用命令与文件工具：`aptitude`、`newsboat`、`vim`、`tmux`、`strace`、`lsof`、`rsync`、`tree`、`ncdu`、`zstd`、`psmisc`、`moreutils`、`inotify-tools`、`patch`、`less`、`pv`、`time`、`fzf`、`duf`、`dos2unix`、`bsdextrautils`、`gettext-base`、`bc`、`zip`、`unzip`、`p7zip-full`、`jq`、`aria2`、`file`
 - 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`、`netcat-openbsd`、`whois`
 - 加密与证书工具：`openssl`、`gnupg`
@@ -185,8 +185,12 @@ RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过
 
 旧镜像在缺少 Fcitx5 图形配置组件时可能出现这种情况。当前镜像使用 `aptitude` 保留 Debian 推荐依赖，会自动补齐 Fcitx5 推荐的图形配置和桌面集成组件；更新到最新镜像并重建容器即可。
 
-### PCManFM / tint2 部分图标空白或颜色异常
+### Fcitx5 能选择“拼音”，但 GTK 程序仍不能输入中文
 
-当前镜像安装 `Adwaita`、`Breeze` 和 `LXDE` 图标资源。若 GTK3 用户配置中没有指定图标主题，桌面启动时默认初始化 `gtk-icon-theme-name=Adwaita`，避免 PCManFM 等程序在没有明确图标主题时出现缺图标；该设置不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。
+RDP 与 VNC 桌面启动脚本会显式设置 `GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`、`XMODIFIERS=@im=fcitx`，并启动 `fcitx5`。构建阶段还会检查 GTK3 Fcitx5 输入模块、拼音模块和拼音配置文件确实存在，避免镜像在缺少关键输入组件时仍然构建成功。
 
-Fcitx5 托盘右键菜单中的“配置”“重新启动”“退出”等文字项本身由 Fcitx5 上游 X11 托盘菜单实现，未为这些菜单项设置图标，因此没有菜单图标不代表缺包或图标主题损坏。
+### PCManFM / tint2 / Fcitx5 部分图标空白或颜色异常
+
+当前镜像同时安装 `Adwaita`、`Adwaita Legacy`、`Breeze` 和 `LXDE` 图标资源。`Adwaita Legacy` 用于补回新版 Adwaita 已移除、但传统桌面程序仍会引用的全彩图标；GTK3 用户配置没有指定图标主题时，桌面启动脚本默认初始化 `gtk-icon-theme-name=Adwaita`，但不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。
+
+Fcitx5 本体和内置拼音均自带自己的 hicolor 图标；构建阶段会检查 `fcitx.png` 与 `fcitx-pinyin.png` 确实存在。拼音输入法配置本身使用 `fcitx-pinyin` 图标，因此 Fcitx5/拼音图标资源缺失会在构建阶段直接失败，而不是留到运行后再猜。

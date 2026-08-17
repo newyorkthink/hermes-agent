@@ -33,7 +33,7 @@ RUN apt-get update && \
         sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
         pulseaudio desktop-file-utils xdg-utils menu lxappearance \
-        libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme breeze-icon-theme lxde-icon-theme \
+        libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme adwaita-icon-theme-legacy breeze-icon-theme lxde-icon-theme \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
@@ -77,7 +77,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期只检查关键程序是否存在；不启动服务，不改写上游 ENTRYPOINT/CMD。
+# 构建期检查远程桌面、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v Xvfb >/dev/null && \
@@ -87,5 +87,12 @@ RUN command -v xrdp >/dev/null && \
     command -v tint2 >/dev/null && \
     command -v firefox-esr >/dev/null && \
     command -v google-chrome >/dev/null && \
+    command -v fcitx5 >/dev/null && \
+    command -v fcitx5-diagnose >/dev/null && \
+    test -f /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-fcitx5.so && \
+    test -f /usr/lib/x86_64-linux-gnu/fcitx5/libpinyin.so && \
+    test -f /usr/share/fcitx5/inputmethod/pinyin.conf && \
+    test -f /usr/share/icons/hicolor/16x16/apps/fcitx.png && \
+    test -f /usr/share/icons/hicolor/16x16/apps/fcitx-pinyin.png && \
     test -f /etc/X11/xrdp/xorg.conf && \
     test -x /etc/xrdp/startwm.sh
