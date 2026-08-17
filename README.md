@@ -12,7 +12,7 @@
 - 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`xfce4-appfinder`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - RDP 音频：`pulseaudio` + 官方 [`neutrinolabs/pulseaudio-module-xrdp v0.8`](https://github.com/neutrinolabs/pulseaudio-module-xrdp/tree/v0.8)；模块在独立阶段按最终镜像的 PulseAudio 版本编译
-- Hermes 语音运行时：`faster-whisper==1.2.1`、`openwakeword==0.6.0`、`onnxruntime==1.27.0`、`sounddevice==0.5.5`、`numpy==2.4.3` + 上游锁文件中的 ONNX 传递依赖 + `libportaudio2`；Python 版本按 Hermes v0.20.2 固定，系统库供后端 PortAudio 使用
+- Hermes 语音运行时：`faster-whisper==1.2.1`、`openwakeword==0.6.0`、`onnxruntime==1.27.0`、`sounddevice==0.5.5`、`numpy==2.4.3` + 上游锁文件中的 ONNX 传递依赖 + `libportaudio2`；Python 版本按 Hermes v0.20.2 固定，共享 ONNX 模型在构建期写入镜像并以 `hermes` 用户实际加载
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
 - 字体与图标：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
@@ -299,7 +299,16 @@ No solution found ... numpy==2.4.3 ... numpy==2.5.1
 
 这也不是插件丢失。旧 Dockerfile 只安装 `faster-whisper==1.2.1`，构建时把环境解析成了 `numpy==2.5.1` 和 `onnxruntime==1.28.0`；Hermes v0.20.2 的默认 Wake word 懒安装固定要求 `numpy==2.4.3` 和 `onnxruntime==1.27.0`，因此解析器同时看到两套精确版本后拒绝安装。
 
-当前 Dockerfile 从基础镜像自己的 `uv.lock` 生成约束文件，先锁齐按键录音和 openWakeWord ONNX 运行依赖，再以 `--no-deps` 安装 `openwakeword==0.6.0`。这是因为该旧版包在 Linux 元数据中还声明了 `tflite-runtime`，但它没有 CPython 3.13 wheel；Hermes 在 Linux 默认走 ONNX，并不使用这项 TFLite 运行库。构建阶段会检查整个已安装环境没有偏离上游锁文件，再导入全部 ONNX 运行模块并核对关键版本。要使用这两层修复，需要拉取新镜像并重新创建容器。
+当前 Dockerfile 从基础镜像自己的 `uv.lock` 生成约束文件，先锁齐按键录音和 openWakeWord ONNX 运行依赖，再以 `--no-deps` 安装 `openwakeword==0.6.0`。这是因为该旧版包在 Linux 元数据中还声明了 `tflite-runtime`，但它没有 CPython 3.13 wheel；Hermes 在 Linux 默认走 ONNX，并不使用这项 TFLite 运行库。构建阶段会检查整个已安装环境没有偏离上游锁文件，再导入全部 ONNX 运行模块并核对关键版本。
+
+依赖安装成功后还可能出现：
+
+```text
+[ONNXRuntimeError] : 3 : NO_SUCHFILE
+.../openwakeword/resources/models/melspectrogram.onnx ... File doesn't exist
+```
+
+这是 `openwakeword==0.6.0` wheel 未携带共享特征模型，而首次运行默认把模型下载到安装包自己的 `resources/models`；Docker 后端以 `hermes` 用户运行，不能向 root 所有的 `.venv/site-packages` 写入文件。当前 Dockerfile 在构建期调用 openWakeWord 官方下载器，只预取共享模型，再用 `/command/s6-setuidgid hermes` 实际加载仓库自带的 `hey_hermes.onnx`。模型缺失会直接让镜像构建失败，不再留到运行时；不需要也不应把 Python 安装目录改成所有用户可写。要使用这三层修复，需要拉取新镜像并重新创建容器。
 
 `libportaudio2` 只修复“系统库缺失”这一层。按 [Hermes 上游 Wake word 文档](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/wake-word.md)，Wake word 监听器运行在 Python 后端；Desktop 远程连接 Docker 后端时，客户端按键录音可用，并不证明容器后端也拥有输入设备。若系统库修复后改为提示没有可用输入设备，应继续检查后端可见的麦克风，而不是修改已经有效的 RDP 播放参数。
 
@@ -416,6 +425,10 @@ docker run -d \
 ### 后台为什么显示 `numpy==2.4.3` 与 `numpy==2.5.1` 冲突
 
 这是旧镜像的 Python 依赖版本冲突，不是 `wake.openwakeword` 插件文件缺失。旧 Dockerfile 单独安装 `faster-whisper` 时得到 `numpy==2.5.1` / `onnxruntime==1.28.0`，而 Hermes v0.20.2 固定要求 `numpy==2.4.3` / `onnxruntime==1.27.0`。当前 Dockerfile 从基础镜像的 `uv.lock` 生成全环境约束后安装整组 ONNX 依赖，并用 `--no-deps` 安装 `openwakeword`，避开 Linux CPython 3.13 不可用且当前 ONNX 路径不需要的 `tflite-runtime`；更新镜像并重新创建容器后，不应再手工执行提示中的临时 `uv pip install`。
+
+### 后台为什么显示 `melspectrogram.onnx` 不存在
+
+这不是插件、RDP 音频或麦克风设备错误，而是 `openwakeword==0.6.0` 安装包未自带共享 ONNX 特征模型。运行时下载会写入 root 所有的 `.venv/site-packages`，但 Docker 后端实际以 `hermes` 用户运行，因此模型仍不存在。当前 Dockerfile 已在构建期下载共享模型，并以 `hermes` 用户实际加载一次 `hey_hermes.onnx`；构建通过后不需要运行时下载，也不要放宽整个 Python 环境的写权限。
 
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
