@@ -16,10 +16,6 @@ export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
 
-# 容器没有 systemd-logind，pam_systemd 无法创建 /run/user/<uid>；由容器初始化脚本创建标准用户运行目录，桌面和 PipeWire 共用该目录。
-user_uid="$(id -u)"
-export XDG_RUNTIME_DIR="/run/user/${user_uid}"
-
 # 窗口管理器使用 Openbox，面板使用 tint2，桌面层使用 xfdesktop；Konqueror 保持主文件管理入口。
 # Thunar 仅用于 xfdesktop 的桌面特殊图标/文件管理首选应用；GTK 使用深色主题，图标主题仍独立使用彩色 Adwaita 系列。
 exec dbus-run-session -- sh -c '
@@ -72,99 +68,19 @@ exec dbus-run-session -- sh -c '
         fi
     fi
 
-    display_id="${DISPLAY#:}"
-    display_id="${display_id%%.*}"
-    uid="$(id -u)"
-    mkdir -p "$HOME/.cache/hermes"
+    # Debian 13 默认关闭 PulseAudio 客户端 autospawn，当前 Openbox 会话也没有 systemd --user；先显式启动会话级 PulseAudio，再加载官方 xrdp 音频模块。
+    if ! pactl info >/dev/null 2>&1; then
+        pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || echo "[xrdp] PulseAudio 会话服务启动失败，桌面继续启动。" >&2
+    fi
 
-    # xrdp 0.10 为每个 UID 使用独立 socket 目录。正常情况下 sesexec 已设置这些变量；这里同时兼容发行版旧值和缺失值，确保 PipeWire 模块连接到当前 chansrv 的真实音频 socket。
-    export XRDP_SESSION="${XRDP_SESSION:-1}"
-    xrdp_socket_path="${XRDP_SOCKET_PATH:-/run/xrdp/sockdir}"
-    case "$xrdp_socket_path" in
-        */"$uid")
-            ;;
-        *)
-            if [ -d "$xrdp_socket_path/$uid" ]; then
-                xrdp_socket_path="$xrdp_socket_path/$uid"
-            elif [ -d "/run/xrdp/sockdir/$uid" ]; then
-                xrdp_socket_path="/run/xrdp/sockdir/$uid"
-            fi
-            ;;
-    esac
-    export XRDP_SOCKET_PATH="$xrdp_socket_path"
-    export XRDP_PULSE_SINK_SOCKET="${XRDP_PULSE_SINK_SOCKET:-xrdp_chansrv_audio_out_socket_${display_id}}"
-    export XRDP_PULSE_SOURCE_SOCKET="${XRDP_PULSE_SOURCE_SOCKET:-xrdp_chansrv_audio_in_socket_${display_id}}"
-    xrdp_sink_socket="$XRDP_SOCKET_PATH/$XRDP_PULSE_SINK_SOCKET"
-
-    pipewire_pid=""
-    wireplumber_pid=""
-    pipewire_pulse_pid=""
-
-    # 当前 Openbox 会话没有 systemd --user；显式启动会话级 PipeWire、WirePlumber 和 pipewire-pulse。
-    pipewire >"$HOME/.cache/hermes/pipewire-${display_id}.log" 2>&1 &
-    pipewire_pid=$!
-
-    i=0
-    while ! pw-cli info 0 >/dev/null 2>&1; do
-        i=$((i + 1))
-        [ "$i" -ge 50 ] && break
-        sleep 0.1
-    done
-
-    if pw-cli info 0 >/dev/null 2>&1; then
-        wireplumber >"$HOME/.cache/hermes/wireplumber-${display_id}.log" 2>&1 &
-        wireplumber_pid=$!
-        pipewire-pulse >"$HOME/.cache/hermes/pipewire-pulse-${display_id}.log" 2>&1 &
-        pipewire_pulse_pid=$!
-
-        i=0
-        while ! pactl info >/dev/null 2>&1; do
-            i=$((i + 1))
-            [ "$i" -ge 50 ] && break
-            sleep 0.1
-        done
-
-        if pactl info >/dev/null 2>&1; then
-            # chansrv 与窗口管理器并行启动；先等待本次 display 的 rdpsnd Unix socket，避免模块首次加载时连接到不存在或错误的路径。
-            i=0
-            while [ ! -S "$xrdp_sink_socket" ]; do
-                i=$((i + 1))
-                [ "$i" -ge 50 ] && break
-                sleep 0.1
-            done
-
-            if [ -x /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh ]; then
-                /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh || echo "[xrdp] PipeWire xrdp 音频模块加载失败，桌面继续启动。" >&2
-
-                i=0
-                while ! pactl list short sinks 2>/dev/null | awk "{print \$2}" | grep -qx "xrdp-sink"; do
-                    i=$((i + 1))
-                    [ "$i" -ge 50 ] && break
-                    sleep 0.1
-                done
-
-                if pactl list short sinks 2>/dev/null | awk "{print \$2}" | grep -qx "xrdp-sink"; then
-                    pactl set-default-sink xrdp-sink >/dev/null 2>&1 || true
-                    pactl set-sink-mute xrdp-sink 0 >/dev/null 2>&1 || true
-                    if pactl list short sources 2>/dev/null | awk "{print \$2}" | grep -qx "xrdp-source"; then
-                        pactl set-default-source xrdp-source >/dev/null 2>&1 || true
-                    fi
-                    if [ -S "$xrdp_sink_socket" ]; then
-                        echo "[xrdp] PipeWire RDP 音频就绪: sink=xrdp-sink socket=$xrdp_sink_socket"
-                    else
-                        echo "[xrdp] xrdp-sink 已创建，但 chansrv 音频 socket 尚未出现: $xrdp_sink_socket" >&2
-                    fi
-                else
-                    echo "[xrdp] PipeWire xrdp-sink 未创建，RDP 音频不可用，桌面继续启动。" >&2
-                fi
-            else
-                echo "[xrdp] PipeWire xrdp 音频模块加载脚本不存在，桌面继续启动。" >&2
-            fi
+    if pactl info >/dev/null 2>&1; then
+        if [ -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh ]; then
+            /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh || echo "[xrdp] PulseAudio xrdp 音频模块加载失败，桌面继续启动。" >&2
         else
-            echo "[xrdp] PipeWire PulseAudio 兼容服务不可用，RDP 音频不可用，桌面继续启动。" >&2
+            echo "[xrdp] PulseAudio xrdp 音频模块加载脚本不存在，桌面继续启动。" >&2
         fi
     else
-        echo "[xrdp] PipeWire 会话服务不可用，RDP 音频不可用，桌面继续启动。" >&2
+        echo "[xrdp] PulseAudio 会话服务不可用，RDP 音频不可用，桌面继续启动。" >&2
     fi
 
     fcitx5 -d >/dev/null 2>&1 || true
@@ -183,8 +99,4 @@ exec dbus-run-session -- sh -c '
     tint2 &
 
     wait "$wm_pid"
-
-    [ -z "$pipewire_pulse_pid" ] || kill "$pipewire_pulse_pid" 2>/dev/null || true
-    [ -z "$wireplumber_pid" ] || kill "$wireplumber_pid" 2>/dev/null || true
-    [ -z "$pipewire_pid" ] || kill "$pipewire_pid" 2>/dev/null || true
 '

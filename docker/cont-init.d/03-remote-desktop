@@ -5,14 +5,6 @@ set -eu
 # systemd 不存在时显式执行 Debian xrdp 服务原本的 socket 目录初始化。
 /bin/sh /usr/share/xrdp/socksetup
 
-# 容器没有 systemd-logind，pam_systemd 无法创建标准 XDG_RUNTIME_DIR；为 hermes 创建 /run/user/<uid>，供 RDP 桌面、D-Bus 和 PipeWire 会话共同使用。
-hermes_uid="$(id -u hermes)"
-hermes_gid="$(id -g hermes)"
-mkdir -p /run/user "/run/user/${hermes_uid}"
-chown "${hermes_uid}:${hermes_gid}" "/run/user/${hermes_uid}"
-chmod 0755 /run/user
-chmod 0700 "/run/user/${hermes_uid}"
-
 # RDP 使用上游已有的 hermes 用户；密码只从运行时环境变量读取，不写入镜像或仓库。
 if [ -n "${RDP_PASSWORD:-}" ]; then
     printf 'hermes:%s\n' "${RDP_PASSWORD}" | chpasswd
