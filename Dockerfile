@@ -55,7 +55,7 @@ RUN apt-get update && \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
-        pulseaudio desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
+        pulseaudio libportaudio2 desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
         libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme adwaita-icon-theme-legacy breeze-icon-theme lxde-icon-theme \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
@@ -134,6 +134,7 @@ RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v pulseaudio >/dev/null && \
     command -v pactl >/dev/null && \
+    dpkg-query -W -f='${Status}\n' libportaudio2 2>/dev/null | grep -q '^install ok installed$' && \
     test -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh && \
     test -n "$(find /usr/lib -type f -name 'module-xrdp-sink.so' -print -quit)" && \
     test -n "$(find /usr/lib -type f -name 'module-xrdp-source.so' -print -quit)" && \
