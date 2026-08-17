@@ -25,6 +25,7 @@ exec s6-setuidgid hermes x11vnc \
     -display "${DISPLAY}" \
     -rfbauth /run/x11vnc.pass \
     -rfbport "${vnc_port}" \
+    -rfbportv6 -1 \
     -listen "${vnc_bind}" \
     -no6 \
     -noipv6 \
