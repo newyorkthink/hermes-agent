@@ -69,7 +69,7 @@ COPY --chmod=0755 docker/appimage/xapp-appimage-thumbnailer /usr/local/bin/xapp-
 COPY --chmod=0644 docker/appimage/xapp-appimage-thumbnailer.thumbnailer /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer
 COPY --chmod=0644 docker/appimage/XappThumbnailers/__init__.py /usr/lib/python3/dist-packages/XappThumbnailers/__init__.py
 COPY --chmod=0644 docker/appimage/xapp-thumbnailers-copyright /usr/share/doc/xapp-appimage-thumbnailer/copyright
-RUN python3 -c 'import PIL, gi; from elftools.elf.elffile import ELFFile; gi.require_version("XApp", "1.0"); from gi.repository import XApp; import XappThumbnailers' && \
+RUN /usr/bin/python3 -c 'import PIL, gi; from elftools.elf.elffile import ELFFile; gi.require_version("XApp", "1.0"); from gi.repository import XApp; import XappThumbnailers' && \
     command -v unsquashfs >/dev/null && \
     grep -qx 'MimeType=application/vnd.appimage;' /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer
 
