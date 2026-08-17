@@ -16,7 +16,7 @@ RUN apt-get update && \
         libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox tint2 konqueror xfdesktop4 lxtask mousepad lxterminal xterm firefox-esr \
+        openbox tint2 xfdesktop4 thunar xfce4-helpers konqueror lxtask mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
@@ -66,7 +66,12 @@ RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd6
     rm -f /tmp/chrome.deb && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-# 使用带图标的 Openbox 菜单；保留 Debian 原始菜单作为已有用户配置迁移基线。
+# 默认使用 Openbox 自带的 Onyx 深色主题；只修改系统默认值，不覆盖 /opt/data 中已有的用户 Openbox 配置。
+RUN sed -i '0,/<name>Clearlooks<\/name>/s//<name>Onyx<\/name>/' /etc/xdg/openbox/rc.xml && \
+    grep -q '<name>Onyx</name>' /etc/xdg/openbox/rc.xml && \
+    test -f /usr/share/themes/Onyx/openbox-3/themerc
+
+# 使用带彩色图标的 Openbox 菜单；保留 Debian 原始菜单作为已有用户配置迁移基线。
 RUN install -D -m 0644 /etc/xdg/openbox/menu.xml /usr/local/share/hermes/openbox-menu.debian.xml
 COPY --chmod=0755 docker/openbox/hermes-openbox-app-menu /usr/local/bin/hermes-openbox-app-menu
 COPY docker/openbox/menu.xml /etc/xdg/openbox/menu.xml
@@ -77,7 +82,7 @@ RUN update-menus && \
     python3 -c 'import os, xml.etree.ElementTree as ET; paths=["/etc/xdg/openbox/menu.xml","/var/lib/openbox/debian-menu.xml","/tmp/hermes-openbox-app-menu.xml"]; roots=[ET.parse(p).getroot() for p in paths]; nodes=[n for root in roots for n in root.iter() if n.tag.rsplit("}",1)[-1] in {"menu","item"} and n.get("id") != "root-menu"]; assert nodes and all(n.get("icon") and os.path.isfile(n.get("icon")) for n in nodes)' && \
     rm -f /tmp/hermes-openbox-app-menu.xml
 
-# xrdp 使用标准 Xorg 会话；窗口管理器使用 Openbox，面板使用 tint2，桌面层使用 xfdesktop，文件管理器使用 Konqueror。
+# xrdp 使用标准 Xorg 会话；窗口管理器使用 Openbox，面板使用 tint2，桌面层使用 xfdesktop，文件管理器入口仍使用 Konqueror。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
 
 # 在 Hermes 自带的 s6-overlay 中增加远程桌面初始化与监督服务。
@@ -88,7 +93,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、桌面组件、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
+# 构建期检查远程桌面、桌面组件、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v Xvfb >/dev/null && \
@@ -97,9 +102,12 @@ RUN command -v xrdp >/dev/null && \
     command -v openbox >/dev/null && \
     command -v tint2 >/dev/null && \
     command -v xfdesktop >/dev/null && \
+    command -v thunar >/dev/null && \
     command -v lxtask >/dev/null && \
     command -v python3 >/dev/null && \
     test -x /usr/local/bin/hermes-openbox-app-menu && \
+    test -f /usr/share/xfce4/helpers/thunar.desktop && \
+    test -f /usr/share/xfce4/helpers/debian-x-terminal-emulator.desktop && \
     command -v konqueror >/dev/null && \
     command -v kfmclient >/dev/null && \
     command -v firefox-esr >/dev/null && \
@@ -111,5 +119,7 @@ RUN command -v xrdp >/dev/null && \
     test -f /usr/share/fcitx5/inputmethod/pinyin.conf && \
     test -f /usr/share/icons/hicolor/16x16/apps/fcitx.png && \
     test -f /usr/share/icons/hicolor/16x16/apps/fcitx-pinyin.png && \
+    test -f /usr/share/icons/AdwaitaLegacy/16x16/legacy/applications-system.png && \
+    test -f /usr/share/icons/AdwaitaLegacy/16x16/legacy/utilities-terminal.png && \
     test -f /etc/X11/xrdp/xorg.conf && \
     test -x /etc/xrdp/startwm.sh

@@ -9,37 +9,35 @@
 - 办公与文档：`libreoffice`、`libreoffice-gtk3`、`pandoc`、`poppler-utils`、`ghostscript`
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：`google-chrome-stable`、`firefox-esr`
-- 桌面与文件管理：`openbox`、`tint2`、`xfdesktop4`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
+- 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
-- 字体与主题：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
+- 字体与图标：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
 - 常用命令与文件工具：`aptitude`、`newsboat`、`vim`、`tmux`、`strace`、`lsof`、`rsync`、`tree`、`ncdu`、`zstd`、`psmisc`、`moreutils`、`inotify-tools`、`patch`、`less`、`pv`、`time`、`fzf`、`duf`、`dos2unix`、`bsdextrautils`、`gettext-base`、`bc`、`zip`、`unzip`、`p7zip-full`、`jq`、`aria2`、`file`
 - 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`、`netcat-openbsd`、`whois`
 - 加密与证书工具：`openssl`、`gnupg`
 - 开发与底层依赖：`build-essential`、`pkg-config`、`libssl-dev`、`libffi-dev`、`libxml2-dev`、`libxslt1-dev`、`libjpeg-dev`、`libpng-dev`、`libwebp-dev`、`libmagic-dev`、`sqlite3`、`libsqlite3-dev`
-- 桌面与运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
+- 桌面运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
 - 基础环境：`locales`、`ca-certificates`、`tzdata`
 
 仓库中不保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
 
-## 镜像
+## 镜像与自动构建
 
-GHCR 镜像地址：
+GHCR：
 
 ```text
 ghcr.io/newyorkthink/hermes-agent:latest
 ```
 
-拉取最新镜像：
+拉取：
 
 ```bash
 docker pull ghcr.io/newyorkthink/hermes-agent:latest
 ```
 
-GitHub Actions 只发布 `latest`，不上传 Docker Hub，不创建日期标签、提交 SHA 标签或 GitHub Release。
-
-## 自动跟踪上游
+GitHub Actions 只发布 `latest`，不上传 Docker Hub，不创建日期标签、提交 SHA 标签、Artifact 或 GitHub Release。
 
 上游基础镜像：
 
@@ -47,20 +45,60 @@ GitHub Actions 只发布 `latest`，不上传 Docker Hub，不创建日期标签
 nousresearch/hermes-agent:latest
 ```
 
-GitHub Actions 每 6 小时检查一次上游镜像 digest：
+构建规则：
 
-- 上游 digest 没有变化：直接结束，不执行完整 Docker 构建。
-- 上游 digest 发生变化：自动重新构建并覆盖 `ghcr.io/newyorkthink/hermes-agent:latest`。
-- 本仓库 Dockerfile、远程桌面配置或 workflow 发生变化时：立即重新构建 `latest`。
-- 也可以通过 `workflow_dispatch` 手动触发构建。
+- 每 6 小时检查一次上游镜像 digest；未变化时跳过完整构建，发生变化时重新构建并覆盖 `latest`。
+- `main` 分支的 `Dockerfile`、`docker/**`、`.dockerignore`、`.github/workflows/build.yml` 发生变化时自动构建。
+- 支持 `workflow_dispatch` 手动触发。
+- 构建时把实际使用的上游 digest 写入镜像元数据。
+- workflow 使用并发队列，不主动取消正在运行的构建。
 
-构建时会把实际使用的上游 digest 写入镜像元数据，用于下一次自动检查，不需要保存日期版本或额外状态文件。
+## 桌面环境
 
-## 桌面环境与持久化
+RDP 与 VNC 使用同一套轻量桌面结构：
 
-RDP 与 VNC 会话使用 `Openbox + tint2`，`xfdesktop` 负责桌面背景和桌面图标，文件管理器使用 `Konqueror`，任务管理器使用 `LXTask`；不再安装或启动 PCManFM。Openbox 默认的 `Super+E` 会执行 `kfmclient openProfile filemanagement`，`konqueror` 软件包会提供 `kfmclient`，因此不需要额外修改 Openbox 快捷键。
+```text
+Openbox     窗口管理器
+tint2       面板 / 任务栏
+xfdesktop   桌面背景、桌面文件和特殊桌面图标
+Konqueror   主文件管理入口
+Thunar      xfdesktop 的文件管理首选应用和桌面特殊图标打开程序
+LXTask      轻量图形任务管理器
+```
 
-Debian Trixie 中 `konqueror` 对 `dolphin` 是软件包依赖，因此由 `aptitude` 安装 Konqueror 时会同时拉取 Dolphin 等 KDE/Qt 运行依赖；本镜像仍以 Konqueror 作为文件管理入口，不主动启动 Dolphin。
+PCManFM 已移除，不再安装或启动。
+
+Openbox 默认 `Super+E` 仍执行 `kfmclient openProfile filemanagement`，因此快捷键继续打开 Konqueror。Thunar 不替换该入口，只负责 xfdesktop 的“主文件夹 / 文件系统 / 回收站 / 设备”等桌面图标，以及 Xfce 首选文件管理器调用。
+
+桌面右键由 xfdesktop 处理；“Open Terminal Here” 使用 Xfce `TerminalEmulator` 首选应用。首次生成用户配置时默认使用：
+
+```text
+FileManager=thunar
+TerminalEmulator=debian-x-terminal-emulator
+```
+
+若 `/opt/data/.config/xfce4/helpers.rc` 已经存在对应设置，则不会覆盖用户自己的选择。
+
+### 主题和图标
+
+远程桌面会话默认使用：
+
+```text
+GTK_THEME=Adwaita:dark
+```
+
+Openbox 的系统默认窗口主题使用自带的 `Onyx` 深色主题；已有用户 Openbox 配置不会被覆盖。
+
+深色界面与图标主题分开处理：默认图标主题仍为 `Adwaita`，并保留 `Adwaita Legacy`、`Breeze`、`LXDE` 图标资源。Openbox 自定义菜单优先使用全彩 `AdwaitaLegacy` PNG 图标，不把界面切成深色时顺带改成黑色 symbolic 图标。
+
+若用户已在 `~/.config/gtk-3.0/settings.ini` 指定 `gtk-icon-theme-name`，启动脚本不会覆盖；只有未设置时才初始化：
+
+```ini
+[Settings]
+gtk-icon-theme-name=Adwaita
+```
+
+### 持久化
 
 桌面会话统一使用：
 
@@ -71,34 +109,34 @@ LANGUAGE=zh_CN:zh
 LC_ALL=zh_CN.UTF-8
 ```
 
-桌面启动脚本不固定 GTK 明暗主题，主题按用户自己的桌面配置生效。若用户尚未在 `~/.config/gtk-3.0/settings.ini` 中设置 `gtk-icon-theme-name`，首次桌面会话会默认写入 `Adwaita` 图标主题；已有图标主题设置不会被覆盖。桌面会话启动时还会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5、Openbox、xfdesktop 与 tint2。浏览器、Fcitx5、Openbox、xfdesktop、tint2、Konqueror 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+浏览器、Fcitx5、Openbox、xfdesktop、tint2、Konqueror、Thunar 等用户配置都写入 `/opt/data`。运行容器时应把宿主机持久化目录挂载到 `/opt/data`。
 
-PCManFM 保持移除；桌面背景、桌面文件和特殊桌面图标由 `xfdesktop` 管理，文件浏览仍统一通过 Konqueror。`xfdesktop` 显示的是 `~/Desktop` 中实际存在的文件、目录和启动器，并不会自动把所有已安装 GUI 程序复制到桌面。`xfdesktop` 运行时桌面右键菜单也由它处理，不再由 Openbox 根窗口直接处理。
+xfdesktop 显示 `~/Desktop` 中实际存在的文件、目录和启动器，并显示启用的特殊桌面图标；不会自动把所有已安装 GUI 程序复制到桌面。
 
 ## RDP
 
-RDP 使用 Hermes 上游自带的 `hermes` 用户，通过运行时环境变量设置密码：
+RDP 使用上游已有的 `hermes` 用户。密码只从运行时环境变量读取：
 
 ```text
 RDP_PASSWORD
 ```
 
-默认监听地址和端口，可通过运行时环境变量覆盖：
+默认：
 
 ```text
 RDP_BIND=0.0.0.0
 RDP_PORT=3389
 ```
 
-未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
+未设置 `RDP_PASSWORD` 时不会在镜像中预置密码。
 
-RDP 使用 xorgxrdp 创建独立 Xorg 会话，窗口管理器和面板使用 `Openbox + tint2`，`xfdesktop` 负责桌面层，文件管理器使用 Konqueror。xrdp 守护进程以 `xrdp` 用户运行，因此镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免会话已经创建但主 xrdp 进程无法访问 session socket 而出现 `Error connecting to user session`。
+RDP 使用 xorgxrdp 创建独立 Xorg 会话。xrdp 守护进程以 `xrdp` 用户运行，镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免用户会话 socket 权限问题。
 
-RDP 登录成功进入用户会话后，剪贴板由 xrdp 的 `chansrv/cliprdr` 提供，配置允许双向剪贴板。xrdp 自身的登录窗口出现在用户会话和 `chansrv` 建立之前，因此登录窗口的密码框不能依赖 RDP 剪贴板粘贴；进入桌面后的普通文本复制粘贴不受此限制。
+登录桌面后，剪贴板由 xrdp `chansrv/cliprdr` 提供并允许双向复制粘贴；xrdp 登录窗口本身出现于用户会话建立之前，因此密码框不能依赖 RDP 剪贴板。
 
 ### RDP 共享目录
 
-xrdp 的目录重定向通过 `chansrv + FUSE` 工作。只有需要使用 RDP 客户端“共享目录”功能时，才需要给容器增加：
+xrdp 目录重定向通过 `chansrv + FUSE` 工作。需要客户端“共享目录”功能时，容器需要：
 
 ```yaml
 cap_add:
@@ -108,58 +146,47 @@ devices:
   - /dev/fuse:/dev/fuse
 ```
 
-`SYS_ADMIN` 权限范围较大，不使用 RDP 共享目录时不需要添加。
-
-在 Remmina 等客户端的“共享目录”中填写宿主机需要共享的绝对路径后，进入 RDP 会话可从下面的位置访问：
+Remmina 等客户端设置共享目录后，RDP 会话中从下面路径访问：
 
 ```text
 /opt/data/thinclient_drives/
 ```
 
-其下会出现由客户端生成的共享名称。Konqueror 可直接打开该路径，并可自行加入书签方便后续访问。
+其下的共享名称由客户端生成。Konqueror 和 Thunar 都可以直接访问该路径。
 
 ## VNC / noVNC
 
-VNC 密码通过运行时环境变量设置：
+VNC 密码：
 
 ```text
 VNC_PASSWORD
 ```
 
-未设置 `VNC_PASSWORD` 时，x11vnc 与 noVNC 不提供可连接的桌面会话，不会退回无密码模式。
+未设置时 x11vnc 与 noVNC 不提供可连接的桌面会话，不回退到无密码模式。
 
-默认监听地址和端口，可通过运行时环境变量覆盖：
+默认：
 
 ```text
 VNC_BIND=0.0.0.0
 VNC_PORT=5900
 NOVNC_BIND=0.0.0.0
 NOVNC_PORT=6080
-```
-
-VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，同样使用 `Openbox + tint2`，`xfdesktop` 负责桌面层，文件管理器使用 Konqueror；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
-
-x11vnc 显式禁用 IPv6 监听，避免在只希望通过 IPv4 回环地址访问时额外出现 IPv6 监听端口。
-
-可选设置：
-
-```text
 VNC_DISPLAY=:99
 VNC_GEOMETRY=1920x1080
 ```
 
-可通过下面两个变量关闭相应远程服务：
+VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 显式禁用 IPv6 监听。
+
+可以关闭相应远程服务：
 
 ```text
 RDP_ENABLE=0
 VNC_ENABLE=0
 ```
 
-监听地址设为 `127.0.0.1` 时只接受本机连接；在 `network_mode: host` 下可直接用于限制宿主机回环访问。使用 Docker bridge 网络并通过 `-p` 发布端口时，通常应保留容器内监听 `0.0.0.0`，再通过宿主机端口发布地址或防火墙限制访问范围。
+监听地址设为 `127.0.0.1` 时只接受本机连接。在 `network_mode: host` 下无需额外 `ports:` 映射。
 
 ## 运行示例
-
-密码只在运行容器时自行设置，不要写入仓库。下面示例同时把 `/opt/data` 持久化到宿主机当前目录下的 `data`：
 
 ```bash
 docker run -d \
@@ -173,38 +200,77 @@ docker run -d \
   ghcr.io/newyorkthink/hermes-agent:latest
 ```
 
-如果需要 RDP 共享目录，再额外增加 `--cap-add=SYS_ADMIN --device=/dev/fuse:/dev/fuse`；普通远程桌面连接不需要这两个权限。
+需要 RDP 共享目录时额外增加：
+
+```text
+--cap-add=SYS_ADMIN --device=/dev/fuse:/dev/fuse
+```
 
 公网环境不要直接暴露远程桌面端口，优先通过防火墙、VPN 或可信内网限制访问范围。
 
 ## 常见问题
 
-### `Super+E` 提示找不到 `kfmclient`
+### xfdesktop 左上角“主文件夹 / 文件系统 / 共享设备”点了没反应
 
-Openbox 默认 `Super+E` 会执行 `kfmclient openProfile filemanagement`。当前镜像显式安装 `konqueror`，并在构建阶段检查 `konqueror` 与 `kfmclient` 命令都存在；更新到最新镜像并重建容器后即可使用该默认快捷键。
+这些是 xfdesktop 的特殊桌面图标，需要可用的文件管理器首选应用。当前镜像安装 Thunar 和 `xfce4-helpers`，并在用户没有自定义值时初始化 `FileManager=thunar`。
 
-### 桌面右键为什么不是 Openbox 菜单
+### 桌面右键“Open Terminal Here”提示找不到 `TerminalEmulator`
 
-当前桌面会话会启动 `xfdesktop` 来提供桌面背景和桌面图标，因此桌面右键由 `xfdesktop` 处理。这不会替换 Openbox 窗口管理器或 tint2 面板。
+当前镜像安装 Xfce 首选应用 helper，并在用户没有自定义值时初始化：
 
-### RDP 共享目录已经挂载，但文件管理器里没有快捷入口
+```text
+TerminalEmulator=debian-x-terminal-emulator
+```
 
-这不代表挂载失败。直接在 Konqueror 中打开 `/opt/data/thinclient_drives/` 下实际出现的共享目录；需要固定入口时再加入 Konqueror 书签即可。
+系统已有 `lxterminal` / `xterm`，通过 Debian `x-terminal-emulator` 入口启动。
 
-### `docker exec` 查看 `/opt/data/thinclient_drives` 提示权限不足
+### `Super+E` 使用哪个文件管理器
 
-RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过 `docker exec` 以其他用户直接读取时可能出现权限不足。应以 RDP 会话内能否正常进入共享目录并看到宿主机文件作为主要验证方式。
+仍然是 Konqueror。Thunar 只作为 xfdesktop/Xfce 桌面集成所需的首选文件管理器，不替换 Openbox 的 `Super+E` 行为。
 
-### Fcitx5 的“Configure”打开配置目录而不是图形配置工具
+### 为什么桌面右键不是 Openbox 菜单
 
-旧镜像在缺少 Fcitx5 图形配置组件时可能出现这种情况。当前镜像使用 `aptitude` 保留 Debian 推荐依赖，会自动补齐 Fcitx5 推荐的图形配置和桌面集成组件；更新到最新镜像并重建容器即可。
+xfdesktop 正在管理桌面背景和桌面图标，因此桌面右键由 xfdesktop 处理。Openbox 仍然是窗口管理器，tint2 仍然是面板。
 
-### Fcitx5 能选择“拼音”，但 GTK 程序仍不能输入中文
+### 深色主题为什么没有把图标也变黑
 
-RDP 与 VNC 桌面启动脚本会显式设置 `GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`、`XMODIFIERS=@im=fcitx`，并启动 `fcitx5`。构建阶段还会检查 GTK3 Fcitx5 输入模块、拼音模块和拼音配置文件确实存在，避免镜像在缺少关键输入组件时仍然构建成功。
+GTK 深色主题、Openbox 窗口主题和图标主题是分开的。当前配置只把 GTK 与 Openbox 外观设为深色，图标仍使用独立的 Adwaita / AdwaitaLegacy / Breeze / LXDE 资源；Openbox 菜单的固定分类图标使用全彩 AdwaitaLegacy PNG。
 
-### Konqueror / xfdesktop / tint2 / Fcitx5 部分图标空白或颜色异常
+### RDP 共享目录存在但文件管理器没有快捷入口
 
-当前镜像同时安装 `Adwaita`、`Adwaita Legacy`、`Breeze` 和 `LXDE` 图标资源。`Adwaita Legacy` 用于补回新版 Adwaita 已移除、但传统桌面程序仍会引用的全彩图标；GTK3 用户配置没有指定图标主题时，桌面启动脚本默认初始化 `gtk-icon-theme-name=Adwaita`，但不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。Konqueror 属于 KDE/Qt 应用，Breeze 图标资源同时保留。
+挂载正常不代表会自动加入文件管理器侧栏。共享根目录始终从下面路径访问：
 
-Fcitx5 本体和内置拼音均自带自己的 hicolor 图标；构建阶段会检查 `fcitx.png` 与 `fcitx-pinyin.png` 确实存在。拼音输入法配置本身使用 `fcitx-pinyin` 图标，因此 Fcitx5/拼音图标资源缺失会在构建阶段直接失败，而不是留到运行后再猜。
+```text
+/opt/data/thinclient_drives/
+```
+
+### `docker exec` 读取 `/opt/data/thinclient_drives` 提示权限不足
+
+RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载。应以 RDP 会话内部能否正常进入共享目录并看到宿主机文件作为主要验证方式。
+
+### Fcitx5 能选择拼音，但 GTK 程序不能输入中文
+
+RDP 与 VNC 启动脚本显式设置：
+
+```text
+GTK_IM_MODULE=fcitx
+QT_IM_MODULE=fcitx
+XMODIFIERS=@im=fcitx
+```
+
+并启动 `fcitx5`。构建阶段还会检查 GTK3 输入模块、拼音模块、拼音配置和 Fcitx5 图标资源。
+
+## 构建期验证
+
+Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令缺失都会直接使构建失败：
+
+- xrdp / Xorg / Xvfb / x11vnc / noVNC
+- Openbox / tint2 / xfdesktop
+- Thunar、Xfce FileManager / TerminalEmulator helper
+- Konqueror / `kfmclient`
+- LXTask
+- Firefox / Chrome
+- Fcitx5 GTK3 / 拼音组件和关键图标
+- Openbox 深色主题和菜单图标资源
+
+上游 Hermes 的 ENTRYPOINT/CMD 保持不变。

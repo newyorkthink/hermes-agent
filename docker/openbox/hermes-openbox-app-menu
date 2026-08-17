@@ -10,17 +10,18 @@ from pathlib import Path
 from xml.sax.saxutils import escape, quoteattr
 
 DEFAULT_ICON = "/usr/share/icons/Adwaita/16x16/mimetypes/application-x-executable.png"
+LEGACY_ICON_DIR = "/usr/share/icons/AdwaitaLegacy/16x16/legacy"
 
 CATEGORY_RULES = [
-    ("Office", ("Office",), "/usr/share/icons/Adwaita/16x16/mimetypes/x-office-document.png"),
-    ("Development", ("Development", "IDE"), "/usr/share/icons/Adwaita/symbolic/categories/applications-engineering-symbolic.svg"),
-    ("Graphics", ("Graphics",), "/usr/share/icons/Adwaita/symbolic/categories/applications-graphics-symbolic.svg"),
-    ("Internet", ("Network", "WebBrowser", "Email"), "/usr/share/icons/Adwaita/symbolic/legacy/web-browser-symbolic.svg"),
-    ("Multimedia", ("AudioVideo", "Audio", "Video"), "/usr/share/icons/Adwaita/symbolic/categories/applications-multimedia-symbolic.svg"),
-    ("Games", ("Game",), "/usr/share/icons/Adwaita/symbolic/categories/applications-games-symbolic.svg"),
-    ("Settings", ("Settings",), "/usr/share/icons/Adwaita/symbolic/categories/preferences-system-symbolic.svg"),
-    ("System", ("System",), "/usr/share/icons/Adwaita/symbolic/categories/applications-system-symbolic.svg"),
-    ("Utilities", ("Utility",), "/usr/share/icons/Adwaita/symbolic/categories/applications-utilities-symbolic.svg"),
+    ("Office", ("Office",), f"{LEGACY_ICON_DIR}/applications-office.png"),
+    ("Development", ("Development", "IDE"), f"{LEGACY_ICON_DIR}/applications-development.png"),
+    ("Graphics", ("Graphics",), f"{LEGACY_ICON_DIR}/applications-graphics.png"),
+    ("Internet", ("Network", "WebBrowser", "Email"), f"{LEGACY_ICON_DIR}/applications-internet.png"),
+    ("Multimedia", ("AudioVideo", "Audio", "Video"), f"{LEGACY_ICON_DIR}/applications-other.png"),
+    ("Games", ("Game",), f"{LEGACY_ICON_DIR}/applications-games.png"),
+    ("Settings", ("Settings",), f"{LEGACY_ICON_DIR}/applications-system.png"),
+    ("System", ("System",), f"{LEGACY_ICON_DIR}/applications-system.png"),
+    ("Utilities", ("Utility",), f"{LEGACY_ICON_DIR}/applications-utilities.png"),
 ]
 CATEGORY_ICONS = {name: icon for name, _, icon in CATEGORY_RULES}
 CATEGORY_ICONS["Other"] = DEFAULT_ICON
@@ -39,8 +40,7 @@ def icon_index():
         if not root.is_dir():
             continue
         try:
-            iterator = root.rglob("*")
-            for path in iterator:
+            for path in root.rglob("*"):
                 if not path.is_file() or path.suffix.lower() not in {".png", ".svg", ".xpm"}:
                     continue
                 result.setdefault(path.stem, []).append(str(path))
@@ -56,6 +56,8 @@ def icon_score(path):
         score -= 400
     elif "/Adwaita/" in path:
         score -= 300
+    elif "/AdwaitaLegacy/" in path:
+        score -= 280
     elif "/breeze/" in path.lower():
         score -= 250
     if "/48x48/" in path:
@@ -237,19 +239,22 @@ def xml_output():
         items = grouped.get(category, [])
         if not items:
             continue
-        out.append(f"  <menu id={quoteattr('hermes-' + category.lower())} label={quoteattr(category)} icon={quoteattr(CATEGORY_ICONS[category])}>")
+        out.append(
+            f"  <menu id={quoteattr('hermes-' + category.lower())} "
+            f"label={quoteattr(category)} icon={quoteattr(CATEGORY_ICONS[category])}>"
+        )
         for name, command, icon in sorted(items, key=lambda item: item[0].casefold()):
             out.append(f"    <item label={quoteattr(name)} icon={quoteattr(icon)}>")
-            out.append(f"      <action name=\"Execute\"><execute>{escape(command)}</execute></action>")
+            out.append(f'      <action name="Execute"><execute>{escape(command)}</execute></action>')
             out.append("    </item>")
         out.append("  </menu>")
 
     other = grouped.get("Other", [])
     if other:
-        out.append(f"  <menu id=\"hermes-other\" label=\"Other\" icon={quoteattr(DEFAULT_ICON)}>")
+        out.append(f'  <menu id="hermes-other" label="Other" icon={quoteattr(DEFAULT_ICON)}>')
         for name, command, icon in sorted(other, key=lambda item: item[0].casefold()):
             out.append(f"    <item label={quoteattr(name)} icon={quoteattr(icon)}>")
-            out.append(f"      <action name=\"Execute\"><execute>{escape(command)}</execute></action>")
+            out.append(f'      <action name="Execute"><execute>{escape(command)}</execute></action>')
             out.append("    </item>")
         out.append("  </menu>")
     out.append("</openbox_pipe_menu>")
