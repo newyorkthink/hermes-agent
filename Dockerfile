@@ -57,9 +57,21 @@ RUN apt-get update && \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
         pulseaudio libportaudio2 desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
         libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme adwaita-icon-theme-legacy breeze-icon-theme lxde-icon-theme \
+        tumbler shared-mime-info libfuse2t64 python3-gi python3-pil python3-pyelftools gir1.2-xapp-1.0 squashfs-tools \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
+
+# Thunar/xfdesktop 使用 Tumbler 生成缩略图；AppImage 缩略图沿用 Linux Mint xapp-thumbnailers 1.2.10
+# （上游提交 0f037c3fdd17a2713e7fb555dcdb5a4b89cbe2d4）的 AppImage 实现，只解析 ELF/SquashFS 并提取 .DirIcon，不执行 AppImage 内容。
+RUN install -d /usr/local/bin /usr/share/thumbnailers /usr/lib/python3/dist-packages/XappThumbnailers /usr/share/doc/xapp-appimage-thumbnailer
+COPY --chmod=0755 docker/appimage/xapp-appimage-thumbnailer /usr/local/bin/xapp-appimage-thumbnailer
+COPY --chmod=0644 docker/appimage/xapp-appimage-thumbnailer.thumbnailer /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer
+COPY --chmod=0644 docker/appimage/XappThumbnailers/__init__.py /usr/lib/python3/dist-packages/XappThumbnailers/__init__.py
+COPY --chmod=0644 docker/appimage/xapp-thumbnailers-copyright /usr/share/doc/xapp-appimage-thumbnailer/copyright
+RUN python3 -c 'import PIL, gi; from elftools.elf.elffile import ELFFile; gi.require_version("XApp", "1.0"); from gi.repository import XApp; import XappThumbnailers' && \
+    command -v unsquashfs >/dev/null && \
+    grep -qx 'MimeType=application/vnd.appimage;' /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer
 
 # Hermes Desktop 按键录音使用 faster-whisper；默认 Wake word 在 Linux 上使用 openWakeWord 的 ONNX 后端。
 # 依赖版本取自 Hermes v0.20.2 的 uv.lock；先锁齐 ONNX 运行依赖，再跳过 openwakeword 在 Linux 上声明但 CPython 3.13 无可用 wheel、且 ONNX 后端不使用的 tflite-runtime。
@@ -143,7 +155,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、RDP 音频、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
+# 构建期检查远程桌面、RDP 音频、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、AppImage 缩略图/FUSE 兼容、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v pulseaudio >/dev/null && \
@@ -159,6 +171,14 @@ RUN command -v xrdp >/dev/null && \
     command -v tint2 >/dev/null && \
     command -v xfdesktop >/dev/null && \
     command -v thunar >/dev/null && \
+    dpkg-query -W -f='${Status}\n' tumbler 2>/dev/null | grep -q '^install ok installed$' && \
+    dpkg-query -W -f='${Status}\n' libfuse2t64 2>/dev/null | grep -q '^install ok installed$' && \
+    test -x /usr/lib/x86_64-linux-gnu/tumbler-1/tumblerd && \
+    test -f /usr/share/dbus-1/services/org.xfce.Tumbler.Thumbnailer1.service && \
+    command -v xapp-appimage-thumbnailer >/dev/null && \
+    command -v unsquashfs >/dev/null && \
+    test -f /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer && \
+    grep -qx 'MimeType=application/vnd.appimage;' /usr/share/thumbnailers/xapp-appimage-thumbnailer.thumbnailer && \
     command -v xfce4-terminal >/dev/null && \
     command -v xfce4-appfinder >/dev/null && \
     command -v xdg-user-dir >/dev/null && \

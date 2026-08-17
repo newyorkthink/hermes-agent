@@ -10,6 +10,7 @@
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：`google-chrome-stable`、`firefox-esr`
 - 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`xfce4-appfinder`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
+- AppImage 桌面支持：`tumbler`、`shared-mime-info`、`libfuse2t64`、`python3-gi`、`python3-pil`、`python3-pyelftools`、`gir1.2-xapp-1.0`、`squashfs-tools`，并内置 Linux Mint `xapp-thumbnailers 1.2.10` 的 AppImage 缩略图实现
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - RDP 音频：`pulseaudio` + 官方 [`neutrinolabs/pulseaudio-module-xrdp v0.8`](https://github.com/neutrinolabs/pulseaudio-module-xrdp/tree/v0.8)；模块在独立阶段按最终镜像的 PulseAudio 版本编译
 - Hermes 语音运行时：`faster-whisper==1.2.1`、`openwakeword==0.6.0`、`onnxruntime==1.27.0`、`sounddevice==0.5.5`、`numpy==2.4.3` + 上游锁文件中的 ONNX 传递依赖 + `libportaudio2`；Python 版本按 Hermes v0.20.2 固定，共享 ONNX 模型在构建期写入镜像并以 `hermes` 用户实际加载
@@ -336,6 +337,14 @@ Remmina 等客户端设置共享目录后，RDP 会话中从下面路径访问�
 
 其下的共享名称由客户端生成。Konqueror 和 Thunar 都可以直接访问该路径。
 
+### 外部 AppImage
+
+`/opt/data/thinclient_drives/` 是 xrdp 的 FUSE 重定向盘，适合传输文件，但不应把它当成本地可执行目录。外部 AppImage 先复制到 `/opt/data` 或其子目录；文件具有可执行权限后，当前桌面可直接双击启动，不要求额外使用 `--appimage-extract-and-run`。
+
+`--appimage-extract-and-run` 只作为 FUSE 无法挂载时的兼容后备，不是当前环境的正常启动方式。镜像额外安装 `libfuse2t64`，只用于兼容仍依赖 `libfuse.so.2` 的旧 Type 2 AppImage；不额外安装旧 `fuse` 包，也不改变现有 RDP 共享目录已经需要的 `SYS_ADMIN` 与 `/dev/fuse` 运行时配置。
+
+Thunar / xfdesktop 的 AppImage 图标由 `tumbler` 处理。仓库内置 [Linux Mint xapp-thumbnailers 1.2.10](https://github.com/linuxmint/xapp-thumbnailers/tree/0f037c3fdd17a2713e7fb555dcdb5a4b89cbe2d4) 中 AppImage 缩略图所需的最小文件，并保留上游 GPL-3+ 版权说明。该实现读取 AppImage 的 ELF/SquashFS 结构并提取 `.DirIcon` 生成缩略图，不执行 AppImage 内的应用程序代码。它与 KDE/Dolphin 使用的 KIO/libappimage 缩略图链路是两套实现，不需要为了 Thunar 再引入 KDE 缩略图插件。
+
 ## VNC / noVNC
 
 VNC 密码：
@@ -442,6 +451,10 @@ GPU 透传与具体程序选择的推理后端是两件事。当前 openWakeWord
 
 当前镜像提供 `xfce4-appfinder`，并在首次桌面会话创建一个“应用程序”启动器。打开它后可以按分类浏览或搜索具有 `.desktop` 入口的 GUI 程序。
 
+### AppImage 双击能运行，但 Thunar / 桌面显示通用图标
+
+这是文件管理器缺少 AppImage 专用缩略图生成器，不代表 AppImage 本身没有图标。当前镜像安装 Tumbler，并内置 Linux Mint `xapp-thumbnailers 1.2.10` 的 AppImage 缩略图实现，从 AppImage 内部 `.DirIcon` 生成 Thunar/xfdesktop 可用的缩略图；不执行 AppImage 内容。该功能与 AppImage 是否能直接启动是两条独立链路。
+
 ### `xfce4-appfinder: not found`
 
 说明当前运行的还是未包含 Application Finder 的旧镜像。新镜像构建完成并重新拉取、重新创建容器后，`xfce4-appfinder` 命令和 `/usr/share/applications/xfce4-appfinder.desktop` 应同时存在。
@@ -488,6 +501,10 @@ GTK 深色主题、Openbox 窗口主题和图标主题是分开的。当前配�
 
 RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载。应以 RDP 会话内部能否正常进入共享目录并看到宿主机文件作为主要验证方式。
 
+### 从 `/opt/data/thinclient_drives` 直接执行 AppImage 提示 `Permission denied`
+
+共享目录是 xrdp 的 FUSE 重定向盘，不作为本地程序执行目录使用。把 AppImage 复制到 `/opt/data` 或其子目录并确保文件已有执行权限；当前 FUSE 配置正常时即可直接双击，不需要把 `--appimage-extract-and-run` 当成固定启动参数。该参数仅用于直接 FUSE 挂载不可用时的后备兼容。
+
 ### Fcitx5 能选择拼音，但 GTK 程序不能输入中文
 
 RDP 与 VNC 启动脚本显式设置：
@@ -531,6 +548,8 @@ XMODIFIERS=@im=fcitx
 - **Wake word 懒安装显示 `numpy==2.4.3` / `numpy==2.5.1` 无解**：旧 Dockerfile 只固定 `faster-whisper`，其余传递依赖被解析到比 Hermes v0.20.2 功能约束更高的版本。当前从基础镜像的 `uv.lock` 生成全环境约束，精确安装 voice/wake ONNX 依赖，再以 `--no-deps` 安装 `openwakeword`，避免它额外解析 CPython 3.13 不可用的 Linux `tflite-runtime`，最后检查环境漂移并导入关键模块；不要在运行中的容器内临时覆盖这些包。
 - **xrdp 会话 socket 权限问题**：容器没有 systemd 代替 Debian 服务做初始化时，必须显式执行 `/usr/share/xrdp/socksetup`；同时 `SessionSockdirGroup` 使用 `xrdp`，否则可能出现 `Error connecting to user session` 一类连接失败。
 - **RDP 共享目录不是普通宿主机挂载**：目录重定向依赖 `chansrv + FUSE`，容器需要 `SYS_ADMIN` 和 `/dev/fuse`。`/opt/data/thinclient_drives/` 是用户会话内的 FUSE 挂载，因此 `docker exec` 直接访问遇到权限问题不能单独作为共享失败依据，应以 RDP 会话内能否正常访问为准。
+- **外部 AppImage 在共享盘不能直接执行、复制后却能双击运行**：`thinclient_drives` 是 xrdp FUSE 重定向盘，不作为程序执行目录。AppImage 复制到 `/opt/data` 后，只要已有执行权限即可沿用正常 FUSE 启动；`--appimage-extract-and-run` 仅保留为 FUSE 失败时的后备。镜像补 `libfuse2t64` 兼容仍依赖 FUSE 2 用户态库的旧 AppImage，不额外安装旧 `fuse` 包，也不新增现有共享目录之外的容器权限。
+- **AppImage 可运行但 Thunar/xfdesktop 只有通用图标**：Dolphin/KIO 的 AppImage 缩略图插件不会自动给 Thunar 使用。当前改用 Xfce 原生 Tumbler 外部缩略图链路，并内置 Linux Mint `xapp-thumbnailers 1.2.10` 的 AppImage 实现，从 `.DirIcon` 生成缩略图；只读取 ELF/SquashFS，不执行 AppImage 内容。
 - **桌面图标与“所有应用图标”不是一回事**：xfdesktop 只显示桌面目录文件和特殊图标，不会自动把 `/usr/share/applications` 全部复制到桌面。应用入口使用 `xfce4-appfinder`，并只做一次性“应用程序”桌面启动器初始化，避免用户删除后又被反复写回。
 - **xfdesktop 特殊图标点了没反应**：桌面“主文件夹 / 文件系统 / 回收站 / 设备”等入口需要 Xfce FileManager helper。当前保留 Konqueror 作为 `Super+E` 主文件管理入口，同时安装 Thunar 并只把 `FileManager=thunar` 用于 xfdesktop/Xfce helper，不能再把两者职责混为一处。
 - **桌面右键终端报 `TerminalEmulator` 不存在**：仅有 Openbox 或通用 xterm 不够，xfdesktop 会调用 Xfce helper。当前显式安装 `xfce4-terminal`，并在缺失时初始化 `TerminalEmulator=xfce4-terminal`；只迁移本镜像曾经写入的旧默认值，不覆盖用户自己的终端选择。
@@ -548,6 +567,7 @@ XMODIFIERS=@im=fcitx
 - xfdesktop 接管根窗口后，桌面右键由 xfdesktop 处理，不应再把 Openbox 根菜单当作主要应用入口；Openbox 自定义应用菜单仍保留，Application Finder 作为更直接的图形启动入口。
 - `HOME=/opt/data` 是 RDP/VNC 的统一持久化基线。启动脚本只初始化缺失值和迁移本镜像明确写入过的旧默认值，不覆盖已有用户选择。
 - GTK 深色主题、Openbox 窗口主题和图标主题分离处理，避免深色界面把应用和菜单图标一起替换成难辨认的黑色 symbolic 图标。
+- 外部 AppImage 在 `/opt/data` 中保留正常直接启动路径；不把 `--appimage-extract-and-run` 强制写进启动方式。`libfuse2t64` 只补旧 AppImage 的 FUSE 2 用户态库兼容，Tumbler + xapp-appimage-thumbnailer 只负责图标缩略图，两条链路互不替代。
 - RDP 与 VNC 使用同一套桌面组件，但不是同一个显示会话：RDP 是 xorgxrdp 创建的 Xorg 会话，VNC 是独立 Xvfb `:99` 会话。
 - x11vnc 在当前 LibVNCServer 组合下，即使 IPv4 已按 `VNC_PORT` 监听并同时设置 `-no6` / `-noipv6`，仍曾实际出现额外的 `[::]:5900` IPv6 RFB listener；在 `network_mode: host` 下会直接抢占宿主机 `5900`。当前额外设置 `-rfbportv6 -1`，明确关闭 IPv6 RFB 端口，使自定义 `VNC_PORT` 与宿主机 RealVNC 等其他 VNC 服务保持端口隔离。
 - noVNC 没有独立密码，统一使用 `VNC_PASSWORD`；根地址通过 `index.html -> vnc.html` 直接进入客户端，不再暴露静态目录列表。
@@ -568,6 +588,8 @@ Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令
 - Openbox / tint2 / xfdesktop
 - `xfce4-appfinder`、`xdg-user-dirs`、`gio`
 - Thunar、Xfce FileManager helper、`xfce4-terminal`
+- Tumbler D-Bus 缩略图服务、`xapp-appimage-thumbnailer`、`unsquashfs` 和 `application/vnd.appimage` 缩略图注册
+- `libfuse2t64`（旧 Type 2 AppImage 的 FUSE 2 用户态库兼容）
 - LibreOffice 简体中文语言包
 - Konqueror / `kfmclient`
 - LXTask
