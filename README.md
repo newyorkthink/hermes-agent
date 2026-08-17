@@ -136,6 +136,34 @@ LC_ALL=zh_CN.UTF-8
 
 xfdesktop 显示实际桌面目录中存在的文件、目录和启动器，并显示启用的特殊桌面图标；不会自动把所有已安装 GUI 程序复制到桌面。实际桌面目录由 `xdg-user-dir DESKTOP` 决定，中文环境下不应在脚本中写死为 `~/Desktop`。
 
+### Hermes API Server 与 `API_SERVER_KEY`
+
+`API_SERVER_KEY` 是 Hermes Agent 上游官方定义的 API Server Bearer Token，不是本派生镜像自定义变量。本仓库不会在 Dockerfile、镜像或 GitHub 仓库中写入任何固定 `API_SERVER_KEY`。
+
+本部署把 API Server 密钥统一交给 Hermes 的持久化配置管理，唯一来源为 `/opt/data/.env`。使用 `./data:/opt/data` 挂载时，对应宿主机文件就是 `./data/.env`：
+
+```text
+API_SERVER_KEY=自行生成的密钥
+```
+
+Compose 只负责 API Server 的启用状态、监听地址和端口，不再传入 `API_SERVER_KEY`：
+
+```yaml
+- API_SERVER_ENABLED=${API_SERVER_ENABLED:-true}
+- API_SERVER_HOST=${API_SERVER_HOST:-127.0.0.1}
+- API_SERVER_PORT=${API_SERVER_PORT:-8642}
+```
+
+不要在 Compose 项目目录的外部 `.env` 中再添加 `API_SERVER_KEY`，也不要在 `docker-compose.yml` 中再添加下面这行：
+
+```yaml
+- API_SERVER_KEY=${API_SERVER_KEY}
+```
+
+这样只维护 `/opt/data/.env` 中的一份 Key，避免外部 Compose `.env` 与 Hermes 持久化 `.env` 同时存在同名密钥造成优先级、轮换和排障混乱。以后即使 Hermes 上游调整或修复运行时环境变量与持久化 `.env` 的优先级，也不需要把 `API_SERVER_KEY` 加回 Compose；只要 Compose 不传入同名变量，本部署仍以 `/opt/data/.env` 作为唯一密钥来源。
+
+`API_SERVER_ENABLED`、`API_SERVER_HOST` 和 `API_SERVER_PORT` 仍可继续通过 Compose 项目目录的 `.env` 覆盖；这里的单一来源约定只针对 `API_SERVER_KEY`。
+
 ## RDP
 
 RDP 使用上游已有的 `hermes` 用户。密码只从运行时环境变量读取：
