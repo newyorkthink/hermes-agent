@@ -13,10 +13,10 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aptitude && \
     aptitude update && \
     DEBIAN_FRONTEND=noninteractive aptitude install -y \
-        libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
+        libreoffice libreoffice-gtk3 libreoffice-l10n-zh-cn pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox tint2 xfdesktop4 thunar xfce4-helpers konqueror lxtask mousepad lxterminal xterm firefox-esr \
+        openbox tint2 xfdesktop4 thunar xfce4-helpers xfce4-terminal konqueror lxtask mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
@@ -103,11 +103,13 @@ RUN command -v xrdp >/dev/null && \
     command -v tint2 >/dev/null && \
     command -v xfdesktop >/dev/null && \
     command -v thunar >/dev/null && \
+    command -v xfce4-terminal >/dev/null && \
     command -v lxtask >/dev/null && \
     command -v python3 >/dev/null && \
     test -x /usr/local/bin/hermes-openbox-app-menu && \
     test -f /usr/share/xfce4/helpers/thunar.desktop && \
-    test -f /usr/share/xfce4/helpers/debian-x-terminal-emulator.desktop && \
+    test -f /usr/share/xfce4/helpers/xfce4-terminal.desktop && \
+    dpkg-query -W -f='${Status}\n' libreoffice-l10n-zh-cn 2>/dev/null | grep -q '^install ok installed$' && \
     command -v konqueror >/dev/null && \
     command -v kfmclient >/dev/null && \
     command -v firefox-esr >/dev/null && \

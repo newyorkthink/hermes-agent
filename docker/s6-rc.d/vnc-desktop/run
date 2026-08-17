@@ -33,12 +33,16 @@ exec s6-setuidgid hermes dbus-run-session -- sh -c '
         cp /etc/xdg/openbox/menu.xml "$user_openbox_menu"
     fi
 
-    # 初始化 Xfce 首选文件管理器和终端；已有用户选择不覆盖。
+    # 初始化 Xfce 首选文件管理器和终端；仅迁移本镜像此前写入的终端默认值，其他用户选择不覆盖。
     xfce_helpers="$HOME/.config/xfce4/helpers.rc"
     mkdir -p "$HOME/.config/xfce4"
     touch "$xfce_helpers"
     grep -q "^FileManager=" "$xfce_helpers" || printf "%s\n" "FileManager=thunar" >> "$xfce_helpers"
-    grep -q "^TerminalEmulator=" "$xfce_helpers" || printf "%s\n" "TerminalEmulator=debian-x-terminal-emulator" >> "$xfce_helpers"
+    if grep -q "^TerminalEmulator=debian-x-terminal-emulator$" "$xfce_helpers"; then
+        sed -i "s/^TerminalEmulator=debian-x-terminal-emulator$/TerminalEmulator=xfce4-terminal/" "$xfce_helpers"
+    elif ! grep -q "^TerminalEmulator=" "$xfce_helpers"; then
+        printf "%s\n" "TerminalEmulator=xfce4-terminal" >> "$xfce_helpers"
+    fi
 
     # 图标主题与深色 GTK 主题分开设置；只在用户没有图标主题时默认使用 Adwaita。
     gtk_settings="$HOME/.config/gtk-3.0/settings.ini"

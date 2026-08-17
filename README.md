@@ -6,10 +6,10 @@
 
 以下为本派生 Dockerfile 显式安装的软件和工具；基础镜像先用 `apt-get` 引导安装 `aptitude`，后续系统软件统一由 `aptitude` 安装并保留 Debian 推荐依赖，自动拉取的依赖不逐项展开。
 
-- 办公与文档：`libreoffice`、`libreoffice-gtk3`、`pandoc`、`poppler-utils`、`ghostscript`
+- 办公与文档：`libreoffice`、`libreoffice-gtk3`、`libreoffice-l10n-zh-cn`、`pandoc`、`poppler-utils`、`ghostscript`
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：`google-chrome-stable`、`firefox-esr`
-- 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
+- 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
@@ -74,10 +74,10 @@ Openbox 默认 `Super+E` 仍执行 `kfmclient openProfile filemanagement`，因�
 
 ```text
 FileManager=thunar
-TerminalEmulator=debian-x-terminal-emulator
+TerminalEmulator=xfce4-terminal
 ```
 
-若 `/opt/data/.config/xfce4/helpers.rc` 已经存在对应设置，则不会覆盖用户自己的选择。
+若 `/opt/data/.config/xfce4/helpers.rc` 已经存在其他终端选择，则不会覆盖；仅会把本镜像此前写入的 `debian-x-terminal-emulator` 默认值迁移为 `xfce4-terminal`。
 
 ### 主题和图标
 
@@ -216,13 +216,17 @@ docker run -d \
 
 ### 桌面右键“Open Terminal Here”提示找不到 `TerminalEmulator`
 
-当前镜像安装 Xfce 首选应用 helper，并在用户没有自定义值时初始化：
+当前镜像直接安装 `xfce4-terminal`，并把 Xfce `TerminalEmulator` 默认值设为：
 
 ```text
-TerminalEmulator=debian-x-terminal-emulator
+TerminalEmulator=xfce4-terminal
 ```
 
-系统已有 `lxterminal` / `xterm`，通过 Debian `x-terminal-emulator` 入口启动。
+如果持久化配置中仍是本镜像此前写入的 `debian-x-terminal-emulator`，启动 RDP / VNC 会话时会自动迁移；其他用户自定义终端不会被覆盖。
+
+### LibreOffice 界面只有英文
+
+当前镜像安装 `libreoffice-l10n-zh-cn`，提供 LibreOffice 简体中文界面资源。桌面会话本身使用 `zh_CN.UTF-8`；已有 LibreOffice 用户配置仍保留，不强制覆盖用户手动选择的界面语言。
 
 ### `Super+E` 使用哪个文件管理器
 
@@ -266,7 +270,8 @@ Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令
 
 - xrdp / Xorg / Xvfb / x11vnc / noVNC
 - Openbox / tint2 / xfdesktop
-- Thunar、Xfce FileManager / TerminalEmulator helper
+- Thunar、Xfce FileManager helper、`xfce4-terminal`
+- LibreOffice 简体中文语言包
 - Konqueror / `kfmclient`
 - LXTask
 - Firefox / Chrome
