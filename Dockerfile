@@ -16,7 +16,7 @@ RUN apt-get update && \
         libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox tint2 pcmanfm mousepad lxterminal xterm firefox-esr \
+        openbox tint2 konqueror mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
@@ -66,7 +66,7 @@ RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd6
     rm -f /tmp/chrome.deb && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-# xrdp 使用标准 Xorg 会话；桌面保持轻量 Openbox + tint2 + PCManFM。
+# xrdp 使用标准 Xorg 会话；桌面保持 Openbox + tint2，文件管理器使用 Konqueror。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
 
 # 在 Hermes 自带的 s6-overlay 中增加远程桌面初始化与监督服务。
@@ -77,7 +77,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
+# 构建期检查远程桌面、文件管理器、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v Xvfb >/dev/null && \
@@ -85,6 +85,8 @@ RUN command -v xrdp >/dev/null && \
     command -v websockify >/dev/null && \
     command -v openbox >/dev/null && \
     command -v tint2 >/dev/null && \
+    command -v konqueror >/dev/null && \
+    command -v kfmclient >/dev/null && \
     command -v firefox-esr >/dev/null && \
     command -v google-chrome >/dev/null && \
     command -v fcitx5 >/dev/null && \

@@ -9,7 +9,7 @@
 - 办公与文档：`libreoffice`、`libreoffice-gtk3`、`pandoc`、`poppler-utils`、`ghostscript`
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：`google-chrome-stable`、`firefox-esr`
-- 轻量桌面：`openbox`、`tint2`、`pcmanfm`、`mousepad`、`lxterminal`、`xterm`
+- 桌面与文件管理：`openbox`、`tint2`、`konqueror`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
@@ -58,7 +58,11 @@ GitHub Actions 每 6 小时检查一次上游镜像 digest：
 
 ## 桌面环境与持久化
 
-RDP 与 VNC 桌面都固定使用轻量 `Openbox + tint2 + PCManFM`，并统一使用：
+RDP 与 VNC 会话使用 `Openbox + tint2`，文件管理器使用 `Konqueror`，不再安装或启动 PCManFM。Openbox 默认的 `Super+E` 会执行 `kfmclient openProfile filemanagement`，`konqueror` 软件包会提供 `kfmclient`，因此不需要额外修改 Openbox 快捷键。
+
+Debian Trixie 中 `konqueror` 对 `dolphin` 是软件包依赖，因此由 `aptitude` 安装 Konqueror 时会同时拉取 Dolphin 等 KDE/Qt 运行依赖；本镜像仍以 Konqueror 作为文件管理入口，不主动启动 Dolphin。
+
+桌面会话统一使用：
 
 ```text
 HOME=/opt/data
@@ -67,7 +71,9 @@ LANGUAGE=zh_CN:zh
 LC_ALL=zh_CN.UTF-8
 ```
 
-桌面启动脚本不固定 GTK 明暗主题，主题按用户自己的桌面配置生效。若用户尚未在 `~/.config/gtk-3.0/settings.ini` 中设置 `gtk-icon-theme-name`，首次桌面会话会默认写入 `Adwaita` 图标主题；已有图标主题设置不会被覆盖。桌面会话启动时还会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、PCManFM 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+桌面启动脚本不固定 GTK 明暗主题，主题按用户自己的桌面配置生效。若用户尚未在 `~/.config/gtk-3.0/settings.ini` 中设置 `gtk-icon-theme-name`，首次桌面会话会默认写入 `Adwaita` 图标主题；已有图标主题设置不会被覆盖。桌面会话启动时还会执行 `xdg-user-dirs-update` 初始化用户目录，并启动 Fcitx5。浏览器、Fcitx5、Openbox、tint2、Konqueror 等用户配置都会写入 `/opt/data`；运行容器时应把宿主机持久化目录挂载到 `/opt/data`，这样重启、删除并重建容器或更新镜像时仍可保留 Firefox、Chrome 和桌面配置。
+
+不再使用 `pcmanfm --desktop` 后，Openbox 根窗口不会由 PCManFM 提供桌面图标和桌面文件管理；文件浏览统一通过 Konqueror 完成。
 
 ## RDP
 
@@ -86,7 +92,7 @@ RDP_PORT=3389
 
 未设置 `RDP_PASSWORD` 时不会在镜像中预置密码，`hermes` 用户保持原有密码状态。
 
-RDP 使用 xorgxrdp 创建独立 Xorg 会话，桌面固定为轻量 `Openbox + tint2 + PCManFM`。xrdp 守护进程以 `xrdp` 用户运行，因此镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免会话已经创建但主 xrdp 进程无法访问 session socket 而出现 `Error connecting to user session`。
+RDP 使用 xorgxrdp 创建独立 Xorg 会话，窗口管理器和面板使用 `Openbox + tint2`，文件管理器使用 Konqueror。xrdp 守护进程以 `xrdp` 用户运行，因此镜像将 `SessionSockdirGroup` 设为 `xrdp`，避免会话已经创建但主 xrdp 进程无法访问 session socket 而出现 `Error connecting to user session`。
 
 RDP 登录成功进入用户会话后，剪贴板由 xrdp 的 `chansrv/cliprdr` 提供，配置允许双向剪贴板。xrdp 自身的登录窗口出现在用户会话和 `chansrv` 建立之前，因此登录窗口的密码框不能依赖 RDP 剪贴板粘贴；进入桌面后的普通文本复制粘贴不受此限制。
 
@@ -110,7 +116,7 @@ devices:
 /opt/data/thinclient_drives/
 ```
 
-其下会出现由客户端生成的共享名称。PCManFM 不一定自动把 xrdp 的 FUSE 共享目录加入左侧“位置”栏；首次进入对应共享目录后，可通过“书签”将当前目录加入左侧栏，之后直接从左侧访问。
+其下会出现由客户端生成的共享名称。Konqueror 可直接打开该路径，并可自行加入书签方便后续访问。
 
 ## VNC / noVNC
 
@@ -131,7 +137,7 @@ NOVNC_BIND=0.0.0.0
 NOVNC_PORT=6080
 ```
 
-VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，桌面同样使用轻量 `Openbox + tint2 + PCManFM`；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
+VNC 桌面默认运行在独立的 Xvfb `:99` 会话中，同样使用 `Openbox + tint2`，文件管理器使用 Konqueror；它与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。为避免 X Server 显示号冲突，VNC 服务会在启动前检查显示是否已存在，并只在显示不可用时清理残留锁文件。
 
 x11vnc 显式禁用 IPv6 监听，避免在只希望通过 IPv4 回环地址访问时额外出现 IPv6 监听端口。
 
@@ -173,9 +179,13 @@ docker run -d \
 
 ## 常见问题
 
-### RDP 共享目录已经存在，但 PCManFM 左侧没有显示
+### `Super+E` 提示找不到 `kfmclient`
 
-这是 PCManFM 左侧栏没有自动加入 xrdp FUSE 共享目录，不代表挂载失败。先打开 `/opt/data/thinclient_drives/` 下实际出现的共享目录，再通过“书签”把当前目录加入左侧栏即可。
+Openbox 默认 `Super+E` 会执行 `kfmclient openProfile filemanagement`。当前镜像显式安装 `konqueror`，并在构建阶段检查 `konqueror` 与 `kfmclient` 命令都存在；更新到最新镜像并重建容器后即可使用该默认快捷键。
+
+### RDP 共享目录已经挂载，但文件管理器里没有快捷入口
+
+这不代表挂载失败。直接在 Konqueror 中打开 `/opt/data/thinclient_drives/` 下实际出现的共享目录；需要固定入口时再加入 Konqueror 书签即可。
 
 ### `docker exec` 查看 `/opt/data/thinclient_drives` 提示权限不足
 
@@ -189,8 +199,8 @@ RDP 共享目录是 `hermes` 用户会话中的 FUSE 挂载；从容器外通过
 
 RDP 与 VNC 桌面启动脚本会显式设置 `GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`、`XMODIFIERS=@im=fcitx`，并启动 `fcitx5`。构建阶段还会检查 GTK3 Fcitx5 输入模块、拼音模块和拼音配置文件确实存在，避免镜像在缺少关键输入组件时仍然构建成功。
 
-### PCManFM / tint2 / Fcitx5 部分图标空白或颜色异常
+### Konqueror / tint2 / Fcitx5 部分图标空白或颜色异常
 
-当前镜像同时安装 `Adwaita`、`Adwaita Legacy`、`Breeze` 和 `LXDE` 图标资源。`Adwaita Legacy` 用于补回新版 Adwaita 已移除、但传统桌面程序仍会引用的全彩图标；GTK3 用户配置没有指定图标主题时，桌面启动脚本默认初始化 `gtk-icon-theme-name=Adwaita`，但不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。
+当前镜像同时安装 `Adwaita`、`Adwaita Legacy`、`Breeze` 和 `LXDE` 图标资源。`Adwaita Legacy` 用于补回新版 Adwaita 已移除、但传统桌面程序仍会引用的全彩图标；GTK3 用户配置没有指定图标主题时，桌面启动脚本默认初始化 `gtk-icon-theme-name=Adwaita`，但不会固定 GTK 明暗主题，也不会覆盖用户已经选择的图标主题。Konqueror 属于 KDE/Qt 应用，Breeze 图标资源同时保留。
 
 Fcitx5 本体和内置拼音均自带自己的 hicolor 图标；构建阶段会检查 `fcitx.png` 与 `fcitx-pinyin.png` 确实存在。拼音输入法配置本身使用 `fcitx-pinyin` 图标，因此 Fcitx5/拼音图标资源缺失会在构建阶段直接失败，而不是留到运行后再猜。

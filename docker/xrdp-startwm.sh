@@ -15,7 +15,7 @@ export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
 
-# 保持轻量桌面，仅使用 Openbox + tint2 + PCManFM。
+# 保持桌面使用 Openbox + tint2，文件管理器使用 Konqueror。
 # 先初始化中文用户目录和 GTK 图标主题，再启动 Openbox；仅在用户未设置图标主题时默认使用 Adwaita，不覆盖现有主题设置。
 exec dbus-run-session -- sh -c '
     command -v xdg-user-dirs-update >/dev/null 2>&1 && xdg-user-dirs-update >/dev/null 2>&1 || true
@@ -44,7 +44,6 @@ exec dbus-run-session -- sh -c '
         sleep 0.1
     done
 
-    pcmanfm --desktop &
     tint2 &
 
     wait "$wm_pid"
