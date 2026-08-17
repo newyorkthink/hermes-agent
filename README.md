@@ -164,6 +164,72 @@ Compose 只负责 API Server 的启用状态、监听地址和端口，不再传
 
 `API_SERVER_ENABLED`、`API_SERVER_HOST` 和 `API_SERVER_PORT` 仍可继续通过 Compose 项目目录的 `.env` 覆盖；这里的单一来源约定只针对 `API_SERVER_KEY`。
 
+### 访问入口与 API 调用
+
+Hermes Desktop AppImage 不内置 Gateway URL、Session Token、`API_SERVER_KEY` 或当前部署端口；连接信息仍由运行时填写或持久化。下面只记录变量对应关系和默认入口，若 Compose 项目 `.env` 修改过端口，实际连接地址以 `.env` 为准。
+
+Hermes Desktop AppImage：
+
+```bash
+# 在 Kali Linux 终端启动 Hermes Desktop
+./Hermes-Desktop-linux-x86_64.AppImage
+```
+
+AppImage 下载入口：
+
+```text
+https://github.com/newyorkthink/hermes-agent/releases/tag/desktop-latest
+```
+
+同一台宿主机连接 Docker Gateway 时填写：
+
+```text
+Gateway URL: http://127.0.0.1:9119
+Session token: Compose 项目 .env 中的 HERMES_DASHBOARD_SESSION_TOKEN
+```
+
+`9119` 是 `HERMES_DASHBOARD_PORT` 的默认值；如果 Compose 项目 `.env` 修改过该端口，就替换为实际值。`HERMES_DASHBOARD_HOST=127.0.0.1` 时只允许本机连接。
+
+其他默认入口：
+
+```text
+OpenAI-compatible API Base URL: http://127.0.0.1:8642/v1
+API health:                      http://127.0.0.1:8642/health
+noVNC:                           http://127.0.0.1:6080/
+RDP:                             127.0.0.1:3389
+VNC:                             127.0.0.1:5900
+```
+
+这些端口分别对应 `API_SERVER_PORT`、`NOVNC_PORT`、`RDP_PORT` 和 `VNC_PORT`；实际端口仍以 Compose 项目 `.env` 为准，不把个人当前端口写入仓库。
+
+OpenAI-compatible 客户端填写：
+
+```text
+Base URL: http://127.0.0.1:8642/v1
+API Key: /opt/data/.env 中的 API_SERVER_KEY
+Model: 先通过 GET /v1/models 获取返回的模型 ID
+```
+
+API Server 使用 Bearer Token。最小测试：
+
+```bash
+# 在 Kali Linux 终端查询 API Server 暴露的模型 ID
+curl http://127.0.0.1:8642/v1/models \
+  -H 'Authorization: Bearer <API_SERVER_KEY>'
+```
+
+将 `<API_SERVER_KEY>` 替换为 `/opt/data/.env` 中的实际 Key；如果 `API_SERVER_PORT` 已修改，同时替换 URL 中的 `8642`。
+
+```bash
+# 在 Kali Linux 终端调用 OpenAI Chat Completions 接口
+curl http://127.0.0.1:8642/v1/chat/completions \
+  -H 'Authorization: Bearer <API_SERVER_KEY>' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"<MODEL_ID>","messages":[{"role":"user","content":"你好"}],"stream":false}'
+```
+
+将 `<MODEL_ID>` 替换为上一条 `/v1/models` 返回的模型 ID。Hermes 上游当前还提供 `/v1/responses`、`/v1/capabilities` 和 `/health`；普通 OpenAI-compatible 客户端只需要 Base URL、API Key 和模型 ID。
+
 ## RDP
 
 RDP 使用上游已有的 `hermes` 用户。密码只从运行时环境变量读取：
