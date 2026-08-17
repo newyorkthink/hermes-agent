@@ -345,6 +345,8 @@ Remmina 等客户端设置共享目录后，RDP 会话中从下面路径访问�
 
 Thunar / xfdesktop 的 AppImage 图标由 `tumbler` 处理。仓库内置 [Linux Mint xapp-thumbnailers 1.2.10](https://github.com/linuxmint/xapp-thumbnailers/tree/0f037c3fdd17a2713e7fb555dcdb5a4b89cbe2d4) 中 AppImage 缩略图所需的最小文件，并保留上游 GPL-3+ 版权说明。该实现读取 AppImage 的 ELF/SquashFS 结构并提取 `.DirIcon` 生成缩略图，不执行 AppImage 内的应用程序代码。它与 KDE/Dolphin 使用的 KIO/libappimage 缩略图链路是两套实现，不需要为了 Thunar 再引入 KDE 缩略图插件。
 
+当前镜像已实际验证：外部 AppImage 复制到 `/opt/data` 的桌面目录后，xfdesktop/Thunar 能显示其内置图标，并可从本地路径直接双击启动。
+
 ## VNC / noVNC
 
 VNC 密码：
@@ -550,6 +552,7 @@ XMODIFIERS=@im=fcitx
 - **RDP 共享目录不是普通宿主机挂载**：目录重定向依赖 `chansrv + FUSE`，容器需要 `SYS_ADMIN` 和 `/dev/fuse`。`/opt/data/thinclient_drives/` 是用户会话内的 FUSE 挂载，因此 `docker exec` 直接访问遇到权限问题不能单独作为共享失败依据，应以 RDP 会话内能否正常访问为准。
 - **外部 AppImage 在共享盘不能直接执行、复制后却能双击运行**：`thinclient_drives` 是 xrdp FUSE 重定向盘，不作为程序执行目录。AppImage 复制到 `/opt/data` 后，只要已有执行权限即可沿用正常 FUSE 启动；`--appimage-extract-and-run` 仅保留为 FUSE 失败时的后备。镜像补 `libfuse2t64` 兼容仍依赖 FUSE 2 用户态库的旧 AppImage，不额外安装旧 `fuse` 包，也不新增现有共享目录之外的容器权限。
 - **AppImage 可运行但 Thunar/xfdesktop 只有通用图标**：Dolphin/KIO 的 AppImage 缩略图插件不会自动给 Thunar 使用。当前改用 Xfce 原生 Tumbler 外部缩略图链路，并内置 Linux Mint `xapp-thumbnailers 1.2.10` 的 AppImage 实现，从 `.DirIcon` 生成缩略图；只读取 ELF/SquashFS，不执行 AppImage 内容。
+- **AppImage 缩略图构建检查不能使用裸 `python3`**：Hermes 基础镜像把 `/opt/hermes/.venv/bin` 放在 PATH 前面，裸 `python3` 会进入 Hermes venv；而 `python3-gi`、`python3-pil`、`python3-pyelftools`、`gir1.2-xapp-1.0` 由 Debian 安装给系统 Python。构建检查必须显式使用 `/usr/bin/python3`，与 `xapp-appimage-thumbnailer` 的 shebang 保持一致；不要为解决 `No module named 'gi'` 把系统 GI 重新装进 Hermes venv。
 - **桌面图标与“所有应用图标”不是一回事**：xfdesktop 只显示桌面目录文件和特殊图标，不会自动把 `/usr/share/applications` 全部复制到桌面。应用入口使用 `xfce4-appfinder`，并只做一次性“应用程序”桌面启动器初始化，避免用户删除后又被反复写回。
 - **xfdesktop 特殊图标点了没反应**：桌面“主文件夹 / 文件系统 / 回收站 / 设备”等入口需要 Xfce FileManager helper。当前保留 Konqueror 作为 `Super+E` 主文件管理入口，同时安装 Thunar 并只把 `FileManager=thunar` 用于 xfdesktop/Xfce helper，不能再把两者职责混为一处。
 - **桌面右键终端报 `TerminalEmulator` 不存在**：仅有 Openbox 或通用 xterm 不够，xfdesktop 会调用 Xfce helper。当前显式安装 `xfce4-terminal`，并在缺失时初始化 `TerminalEmulator=xfce4-terminal`；只迁移本镜像曾经写入的旧默认值，不覆盖用户自己的终端选择。
@@ -588,7 +591,7 @@ Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令
 - Openbox / tint2 / xfdesktop
 - `xfce4-appfinder`、`xdg-user-dirs`、`gio`
 - Thunar、Xfce FileManager helper、`xfce4-terminal`
-- Tumbler D-Bus 缩略图服务、`xapp-appimage-thumbnailer`、`unsquashfs` 和 `application/vnd.appimage` 缩略图注册
+- Tumbler D-Bus 缩略图服务、`xapp-appimage-thumbnailer`、`unsquashfs`、`application/vnd.appimage` 缩略图注册，以及 `/usr/bin/python3` 对 GI/PIL/pyelftools/XApp 的导入
 - `libfuse2t64`（旧 Type 2 AppImage 的 FUSE 2 用户态库兼容）
 - LibreOffice 简体中文语言包
 - Konqueror / `kfmclient`
