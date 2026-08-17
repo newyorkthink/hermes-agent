@@ -140,40 +140,40 @@ xfdesktop 显示实际桌面目录中存在的文件、目录和启动器，并�
 
 `API_SERVER_KEY` 是 Hermes Agent 上游官方定义的 API Server Bearer Token，不是本派生镜像自定义变量。本仓库不会在 Dockerfile、镜像或 GitHub 仓库中写入任何固定 `API_SERVER_KEY`。
 
-本部署把 API Server 密钥统一交给 Hermes 的持久化配置管理，唯一来源为 `/opt/data/.env`。使用 `./data:/opt/data` 挂载时，对应宿主机文件就是 `./data/.env`：
+生成 API Server Key：
 
-```text
-API_SERVER_KEY=自行生成的密钥
+```bash
+# 在 Linux 终端生成 API Server Bearer Token
+openssl rand -hex 32
 ```
 
-Compose 只负责 API Server 的启用状态、监听地址和端口，不再传入 `API_SERVER_KEY`：
+把输出写入持久化目录 `./data/.env`，对应容器内 `/opt/data/.env`：
+
+```dotenv
+# Hermes API Server Bearer Token
+API_SERVER_KEY=这里填写上一步生成的值
+```
+
+本部署把 API Server 密钥统一交给 Hermes 的持久化配置管理，唯一来源为 `/opt/data/.env`。Compose 只负责 API Server 的启用状态、监听地址和端口，不传入 `API_SERVER_KEY`：
 
 ```yaml
+# Hermes OpenAI-compatible API 服务
 - API_SERVER_ENABLED=${API_SERVER_ENABLED:-true}
 - API_SERVER_HOST=${API_SERVER_HOST:-127.0.0.1}
 - API_SERVER_PORT=${API_SERVER_PORT:-8642}
 ```
 
-不要在 Compose 项目目录的外部 `.env` 中再添加 `API_SERVER_KEY`，也不要在 `docker-compose.yml` 中再添加下面这行：
+不要在 Compose 项目目录的外层 `.env` 中再添加 `API_SERVER_KEY`，也不要在 `docker-compose.yml` 中添加：
 
 ```yaml
 - API_SERVER_KEY=${API_SERVER_KEY}
 ```
 
-这样只维护 `/opt/data/.env` 中的一份 Key，避免外部 Compose `.env` 与 Hermes 持久化 `.env` 同时存在同名密钥造成优先级、轮换和排障混乱。以后即使 Hermes 上游调整或修复运行时环境变量与持久化 `.env` 的优先级，也不需要把 `API_SERVER_KEY` 加回 Compose；只要 Compose 不传入同名变量，本部署仍以 `/opt/data/.env` 作为唯一密钥来源。
+这样只维护 `/opt/data/.env` 中的一份 Key，避免外层 Compose `.env` 与 Hermes 持久化 `.env` 同时存在同名密钥造成优先级、轮换和排障混乱。`API_SERVER_ENABLED`、`API_SERVER_HOST` 和 `API_SERVER_PORT` 仍可通过 Compose 项目目录的外层 `.env` 覆盖；这里的单一来源约定只针对 `API_SERVER_KEY`。
 
-`API_SERVER_ENABLED`、`API_SERVER_HOST` 和 `API_SERVER_PORT` 仍可继续通过 Compose 项目目录的 `.env` 覆盖；这里的单一来源约定只针对 `API_SERVER_KEY`。
+### Hermes Desktop AppImage 与 Dashboard Session Token
 
-### 访问入口与 API 调用
-
-Hermes Desktop AppImage 不内置 Gateway URL、Session Token、`API_SERVER_KEY` 或当前部署端口；连接信息仍由运行时填写或持久化。下面只记录变量对应关系和默认入口，若 Compose 项目 `.env` 修改过端口，实际连接地址以 `.env` 为准。
-
-Hermes Desktop AppImage：
-
-```bash
-# 在 Kali Linux 终端启动 Hermes Desktop
-./Hermes-Desktop-linux-x86_64.AppImage
-```
+Hermes Desktop AppImage 不内置 Gateway URL、Session Token、`API_SERVER_KEY`、固定 IP 或当前部署端口。连接信息由运行时填写并由 Desktop 自身持久化，不把个人部署信息写入 AppImage。
 
 AppImage 下载入口：
 
@@ -181,54 +181,102 @@ AppImage 下载入口：
 https://github.com/newyorkthink/hermes-agent/releases/tag/desktop-latest
 ```
 
+启动 AppImage：
+
+```bash
+# 在 Linux 终端启动 Hermes Desktop
+./Hermes-Desktop-linux-x86_64.AppImage
+```
+
+首次给 Docker Gateway 配置固定 Session Token 时，先生成 Token：
+
+```bash
+# 在 Linux 终端生成 Hermes Desktop 连接 Dashboard 使用的固定 Session Token
+openssl rand -hex 32
+```
+
+把输出写入 Compose 项目目录的外层 `.env`，放在 Dashboard 配置下方：
+
+```dotenv
+# Hermes Web Dashboard 开关、监听地址及端口
+HERMES_DASHBOARD=1
+HERMES_DASHBOARD_HOST=127.0.0.1
+HERMES_DASHBOARD_PORT=9119
+
+# Hermes Desktop 连接 Docker Dashboard 使用的固定会话令牌
+HERMES_DASHBOARD_SESSION_TOKEN=这里填写上一步生成的值
+```
+
+`HERMES_DASHBOARD_SESSION_TOKEN` 只放在 Compose 项目目录的外层 `.env`，不要重复写入 `./data/.env`。
+
+`docker-compose.yml` 的 `environment:` 中保留下面四行，由 Compose 把外层 `.env` 的值传入容器：
+
+```yaml
+# 启用 Hermes Web Dashboard；监听地址和端口均可通过外层 .env 自定义
+- HERMES_DASHBOARD=${HERMES_DASHBOARD:-1}
+- HERMES_DASHBOARD_HOST=${HERMES_DASHBOARD_HOST:-127.0.0.1}
+- HERMES_DASHBOARD_PORT=${HERMES_DASHBOARD_PORT:-9119}
+- HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN}
+```
+
+修改外层 `.env` 后，让现有容器读取新环境变量：
+
+```bash
+# 在 Linux 终端进入 Compose 项目目录后重新创建容器以加载新增环境变量
+docker compose up -d
+```
+
 同一台宿主机连接 Docker Gateway 时填写：
 
 ```text
 Gateway URL: http://127.0.0.1:9119
-Session token: Compose 项目 .env 中的 HERMES_DASHBOARD_SESSION_TOKEN
+Session token: Compose 项目外层 .env 中的 HERMES_DASHBOARD_SESSION_TOKEN
 ```
 
-`9119` 是 `HERMES_DASHBOARD_PORT` 的默认值；如果 Compose 项目 `.env` 修改过该端口，就替换为实际值。`HERMES_DASHBOARD_HOST=127.0.0.1` 时只允许本机连接。
+`9119` 是 `HERMES_DASHBOARD_PORT` 的默认值；如果外层 `.env` 修改过该端口，就替换为实际值。`HERMES_DASHBOARD_HOST=127.0.0.1` 时只允许本机连接。
 
-其他默认入口：
+### 访问入口与 API 调用
+
+默认入口：
 
 ```text
+Hermes Desktop Gateway:          http://127.0.0.1:9119
 OpenAI-compatible API Base URL: http://127.0.0.1:8642/v1
-API health:                      http://127.0.0.1:8642/health
-noVNC:                           http://127.0.0.1:6080/
-RDP:                             127.0.0.1:3389
-VNC:                             127.0.0.1:5900
+API health:                     http://127.0.0.1:8642/health
+noVNC:                          http://127.0.0.1:6080/
+RDP:                            127.0.0.1:3389
+VNC:                            127.0.0.1:5900
 ```
 
-这些端口分别对应 `API_SERVER_PORT`、`NOVNC_PORT`、`RDP_PORT` 和 `VNC_PORT`；实际端口仍以 Compose 项目 `.env` 为准，不把个人当前端口写入仓库。
+这些端口分别对应 `HERMES_DASHBOARD_PORT`、`API_SERVER_PORT`、`NOVNC_PORT`、`RDP_PORT` 和 `VNC_PORT`；实际端口以 Compose 项目外层 `.env` 为准，不把个人当前端口写入仓库。
 
 OpenAI-compatible 客户端填写：
 
 ```text
 Base URL: http://127.0.0.1:8642/v1
-API Key: /opt/data/.env 中的 API_SERVER_KEY
+API Key: ./data/.env 中的 API_SERVER_KEY
 Model: 先通过 GET /v1/models 获取返回的模型 ID
 ```
 
 API Server 使用 Bearer Token。最小测试：
 
 ```bash
-# 在 Kali Linux 终端查询 API Server 暴露的模型 ID
+# 在 Linux 终端查询 API Server 暴露的模型 ID
 curl http://127.0.0.1:8642/v1/models \
   -H 'Authorization: Bearer <API_SERVER_KEY>'
 ```
 
-将 `<API_SERVER_KEY>` 替换为 `/opt/data/.env` 中的实际 Key；如果 `API_SERVER_PORT` 已修改，同时替换 URL 中的 `8642`。
+将 `<API_SERVER_KEY>` 替换为 `./data/.env` 中的实际 Key；如果 `API_SERVER_PORT` 已修改，同时替换 URL 中的 `8642`。
 
 ```bash
-# 在 Kali Linux 终端调用 OpenAI Chat Completions 接口
+# 在 Linux 终端调用 OpenAI Chat Completions 接口
 curl http://127.0.0.1:8642/v1/chat/completions \
   -H 'Authorization: Bearer <API_SERVER_KEY>' \
   -H 'Content-Type: application/json' \
   -d '{"model":"<MODEL_ID>","messages":[{"role":"user","content":"你好"}],"stream":false}'
 ```
 
-将 `<MODEL_ID>` 替换为上一条 `/v1/models` 返回的模型 ID。Hermes 上游当前还提供 `/v1/responses`、`/v1/capabilities` 和 `/health`；普通 OpenAI-compatible 客户端只需要 Base URL、API Key 和模型 ID。
+将 `<MODEL_ID>` 替换为上一条 `/v1/models` 返回的模型 ID。Hermes 上游还提供 `/v1/responses`、`/v1/capabilities` 和 `/health`；普通 OpenAI-compatible 客户端只需要 Base URL、API Key 和模型 ID。
 
 ## RDP
 
@@ -371,7 +419,7 @@ docker run -d \
 
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
-这是 xfdesktop 的正常行为：它显示实际桌面目录中的文件/启动器和启用的特殊图标，不会把 `/usr/share/applications` 中所有 GUI 程序自动复制到桌面。
+这是 xfdesktop 的正常行为：它显示实际桌面目录中的文件/启动器和启用的特殊图标，不会把 `/usr/share/applications` 全部复制到桌面。
 
 当前镜像提供 `xfce4-appfinder`，并在首次桌面会话创建一个“应用程序”启动器。打开它后可以按分类浏览或搜索具有 `.desktop` 入口的 GUI 程序。
 
