@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/desktop-appimage.yml
   schedule:
-    # 每天检查一次 NousResearch/hermes-agent 最新稳定 Release；版本未变化时直接结束。
+    # 每天检查一次 NousResearch/hermes-agent 最新稳定 Release；版本未变化且构建修订未变化时直接结束。
     - cron: '23 4 * * *'
   workflow_dispatch:
 
@@ -17,6 +17,9 @@ concurrency:
 
 permissions:
   contents: write
+
+env:
+  DESKTOP_BUILD_REVISION: '2'
 
 jobs:
   build:
@@ -50,6 +53,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          BUILD_REVISION: ${{ env.DESKTOP_BUILD_REVISION }}
         run: |
           set -euo pipefail
 
@@ -70,12 +74,13 @@ jobs:
             --jq '.assets[]?.name' 2>/dev/null || true)"
 
           if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}" \
+            && grep -Fqx "BUILD_REVISION=${BUILD_REVISION}" <<<"${current_body}" \
             && grep -Fqx 'Hermes-Desktop-linux-x86_64.AppImage' <<<"${current_assets}"; then
             echo "build=false" >> "${GITHUB_OUTPUT}"
-            echo "上游版本和现有 AppImage 均未变化：跳过构建。"
+            echo "上游版本、构建修订和现有 AppImage 均未变化：跳过构建。"
           else
             echo "build=true" >> "${GITHUB_OUTPUT}"
-            echo "检测到新的上游稳定版本或缺少 AppImage：执行构建。"
+            echo "检测到新的上游版本、构建修订或缺少 AppImage：执行构建。"
           fi
 
       - name: Normalize latest release title
@@ -125,7 +130,118 @@ jobs:
           set -euo pipefail
           npm ci
 
-      - name: Build official Desktop AppImage
+      - name: Apply standalone Linux AppImage fixes
+        if: steps.gate.outputs.build == 'true'
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          main_path = Path("apps/desktop/electron/main.ts")
+          main_text = main_path.read_text(encoding="utf-8")
+          keyring_marker = "Hermes standalone Linux AppImage: detect the Secret Service/KWallet backend directly"
+
+          if keyring_marker not in main_text:
+              anchor = "// Linux: point Chromium at the session's keychain backend so safeStorage can\n"
+              if anchor not in main_text:
+                  raise SystemExit("无法定位 Linux password-store 初始化位置，停止构建，避免错误修改上游源码。")
+
+              keyring_patch = r'''// Hermes standalone Linux AppImage: detect the Secret Service/KWallet backend directly.
+          // The official `hermes desktop` Python launcher performs this detection before
+          // starting Electron, but a directly launched AppImage bypasses that launcher.
+          // Keep the same detection order so KeePassXC Secret Service, GNOME Keyring and
+          // KWallet can provide Electron safeStorage without forcing plaintext token storage.
+          if (process.platform === 'linux' && !process.env.HERMES_DESKTOP_PASSWORD_STORE) {
+            const kdeVersion = String(process.env.KDE_SESSION_VERSION || '').trim()
+            let detectedPasswordStore: string | null = null
+
+            if (kdeVersion === '6') {
+              detectedPasswordStore = 'kwallet6'
+            } else if (kdeVersion === '5') {
+              detectedPasswordStore = 'kwallet5'
+            } else if (kdeVersion || process.env.KDE_FULL_SESSION) {
+              detectedPasswordStore = 'kwallet'
+            } else if (process.env.GNOME_KEYRING_CONTROL) {
+              detectedPasswordStore = 'gnome-libsecret'
+            } else {
+              try {
+                execFileSync(
+                  'dbus-send',
+                  [
+                    '--session',
+                    '--print-reply',
+                    '--reply-timeout=2000',
+                    '--dest=org.freedesktop.secrets',
+                    '/org/freedesktop/secrets',
+                    'org.freedesktop.DBus.Peer.Ping'
+                  ],
+                  { stdio: 'ignore', timeout: 5000 }
+                )
+                detectedPasswordStore = 'gnome-libsecret'
+              } catch {
+                // No reachable Secret Service provider; keep the upstream fallback behavior.
+              }
+            }
+
+            if (detectedPasswordStore) {
+              process.env.HERMES_DESKTOP_PASSWORD_STORE = detectedPasswordStore
+              console.log(`[hermes] standalone AppImage detected password-store backend: ${detectedPasswordStore}`)
+            }
+          }
+
+          '''
+              main_text = main_text.replace(anchor, keyring_patch + anchor, 1)
+              main_path.write_text(main_text, encoding="utf-8")
+
+          renderer_path = Path("apps/desktop/src/main.tsx")
+          renderer_text = renderer_path.read_text(encoding="utf-8")
+          locale_open = "<I18nProvider>"
+          locale_fixed = "<I18nProvider initialLocale={navigator.language}>"
+
+          if locale_fixed not in renderer_text:
+              if renderer_text.count(locale_open) != 1:
+                  raise SystemExit("无法唯一定位 I18nProvider，停止构建，避免错误修改上游源码。")
+              renderer_text = renderer_text.replace(locale_open, locale_fixed, 1)
+              renderer_path.write_text(renderer_text, encoding="utf-8")
+
+          context_path = Path("apps/desktop/src/i18n/context.tsx")
+          context_text = context_path.read_text(encoding="utf-8")
+          old_locale_line = "          setLocaleState(normalizeLocale(getConfigDisplayLanguage(config)))"
+          new_locale_line = (
+              "          const configuredLocale = getConfigDisplayLanguage(config)\n"
+              "          setLocaleState(\n"
+              "            configuredLocale == null ? normalizeLocale(initialLocale) : normalizeLocale(configuredLocale)\n"
+              "          )"
+          )
+
+          if "configuredLocale == null ? normalizeLocale(initialLocale)" not in context_text:
+              if context_text.count(old_locale_line) != 1:
+                  raise SystemExit("无法唯一定位 Desktop 语言初始化逻辑，停止构建，避免错误修改上游源码。")
+              context_text = context_text.replace(old_locale_line, new_locale_line, 1)
+              context_path.write_text(context_text, encoding="utf-8")
+
+          print("Standalone Linux fixes applied.")
+          PY
+
+          grep -Fq 'Hermes standalone Linux AppImage: detect the Secret Service/KWallet backend directly' \
+            apps/desktop/electron/main.ts
+          grep -Fq '<I18nProvider initialLocale={navigator.language}>' \
+            apps/desktop/src/main.tsx
+          grep -Fq 'configuredLocale == null ? normalizeLocale(initialLocale)' \
+            apps/desktop/src/i18n/context.tsx
+
+      - name: Type-check patched Desktop source
+        if: steps.gate.outputs.build == 'true'
+        working-directory: upstream/apps/desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck
+
+      - name: Build patched official Desktop AppImage
         if: steps.gate.outputs.build == 'true'
         working-directory: upstream/apps/desktop
         shell: bash
@@ -164,6 +280,19 @@ jobs:
           [[ "${appimage_offset}" =~ ^[0-9]+$ ]]
           (( appimage_offset > 0 ))
 
+          extract_dir="$(mktemp -d)"
+          asset_abs="$(realpath "${asset}")"
+          (
+            cd "${extract_dir}"
+            "${asset_abs}" --appimage-extract >/dev/null
+          )
+
+          # Electron 简体中文 locale 资源必须随 AppImage 一起存在。
+          find "${extract_dir}/squashfs-root" \
+            -type f -path '*/locales/zh-CN.pak' -print -quit | grep -q .
+
+          rm -rf "${extract_dir}"
+
           echo "path=${asset}" >> "${GITHUB_OUTPUT}"
           sha256sum "${asset}"
 
@@ -173,18 +302,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          BUILD_REVISION: ${{ env.DESKTOP_BUILD_REVISION }}
           ASSET_PATH: ${{ steps.asset.outputs.path }}
         run: |
           set -euo pipefail
 
           release_notes="$(cat <<EOF_NOTES
-          Hermes Desktop Linux x86_64 AppImage，由 NousResearch/hermes-agent 官方源码原样构建。
+          Hermes Desktop Linux x86_64 AppImage，基于 NousResearch/hermes-agent 对应稳定 Release 构建。
 
           UPSTREAM_REPO=NousResearch/hermes-agent
           UPSTREAM_TAG=${UPSTREAM_TAG}
+          BUILD_REVISION=${BUILD_REVISION}
           ARCH=x86_64
 
-          该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产；Desktop 应用源码和构建脚本均来自对应上游稳定 Release。
+          本仓库仅对 Linux standalone AppImage 补充以下兼容处理：
+          - 直接启动 AppImage 时自动探测 KeePassXC Secret Service、GNOME Keyring 或 KWallet，并选择 Electron password-store，使远程 Gateway Token 可使用 safeStorage 安全保存。
+          - 未在 Hermes 配置中指定 display.language 时，跟随 Linux 当前系统/Chromium 语言；zh_CN/zh-CN/zh-Hans 自动使用 Hermes 官方简体中文界面。
+          - 构建后检查 Electron zh-CN locale 资源存在。
+
+          其余 Desktop 应用源码、功能及 electron-builder 打包链保持对应上游稳定 Release。
+          该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产。
           EOF_NOTES
           )"
 
