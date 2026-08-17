@@ -53,9 +53,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" != "schedule" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "build=true" >> "${GITHUB_OUTPUT}"
-            echo "仓库变更或手动触发：执行 AppImage 构建。"
+            echo "手动触发：执行 AppImage 构建。"
             exit 0
           fi
 
@@ -64,13 +64,31 @@ jobs:
             --json body \
             --jq '.body' 2>/dev/null || true)"
 
-          if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}"; then
+          current_assets="$(gh release view desktop-latest \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json assets \
+            --jq '.assets[]?.name' 2>/dev/null || true)"
+
+          if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}" \
+            && grep -Fqx 'Hermes-Desktop-linux-x86_64.AppImage' <<<"${current_assets}"; then
             echo "build=false" >> "${GITHUB_OUTPUT}"
-            echo "上游版本未变化：跳过构建。"
+            echo "上游版本和现有 AppImage 均未变化：跳过构建。"
           else
             echo "build=true" >> "${GITHUB_OUTPUT}"
-            echo "检测到新的上游稳定版本：执行 AppImage 构建。"
+            echo "检测到新的上游稳定版本或缺少 AppImage：执行构建。"
           fi
+
+      - name: Normalize latest release title
+        if: steps.gate.outputs.build == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release edit desktop-latest \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title 'Hermes Desktop AppImage (latest)'
 
       - name: Checkout upstream source
         if: steps.gate.outputs.build == 'true'
@@ -159,7 +177,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          release_notes="$(cat <<EOF
+          release_notes="$(cat <<EOF_NOTES
           Hermes Desktop Linux x86_64 AppImage，由 NousResearch/hermes-agent 官方源码原样构建。
 
           UPSTREAM_REPO=NousResearch/hermes-agent
@@ -167,7 +185,7 @@ jobs:
           ARCH=x86_64
 
           该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产；Desktop 应用源码和构建脚本均来自对应上游稳定 Release。
-          EOF
+          EOF_NOTES
           )"
 
           if gh release view desktop-latest --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
@@ -177,13 +195,13 @@ jobs:
 
             gh release edit desktop-latest \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "Hermes Desktop AppImage (${UPSTREAM_TAG})" \
+              --title 'Hermes Desktop AppImage (latest)' \
               --notes "${release_notes}"
           else
             gh release create desktop-latest "${ASSET_PATH}" \
               --repo "${GITHUB_REPOSITORY}" \
               --target "${GITHUB_SHA}" \
-              --title "Hermes Desktop AppImage (${UPSTREAM_TAG})" \
+              --title 'Hermes Desktop AppImage (latest)' \
               --notes "${release_notes}" \
               --latest
           fi
