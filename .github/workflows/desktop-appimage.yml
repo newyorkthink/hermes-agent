@@ -1,0 +1,189 @@
+name: Build Hermes Desktop AppImage
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/desktop-appimage.yml
+  schedule:
+    # 每天检查一次 NousResearch/hermes-agent 最新稳定 Release；版本未变化时直接结束。
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: hermes-desktop-appimage
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check latest upstream release
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_json="$(curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            https://api.github.com/repos/NousResearch/hermes-agent/releases/latest)"
+
+          upstream_tag="$(jq -r '.tag_name // empty' <<<"${release_json}")"
+          [[ -n "${upstream_tag}" ]] || {
+            echo "无法读取 NousResearch/hermes-agent 最新 Release tag。"
+            exit 1
+          }
+
+          echo "tag=${upstream_tag}" >> "${GITHUB_OUTPUT}"
+          echo "上游最新稳定版本：${upstream_tag}"
+
+      - name: Decide whether to build
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" != "schedule" ]]; then
+            echo "build=true" >> "${GITHUB_OUTPUT}"
+            echo "仓库变更或手动触发：执行 AppImage 构建。"
+            exit 0
+          fi
+
+          current_body="$(gh release view desktop-latest \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json body \
+            --jq '.body' 2>/dev/null || true)"
+
+          if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}"; then
+            echo "build=false" >> "${GITHUB_OUTPUT}"
+            echo "上游版本未变化：跳过构建。"
+          else
+            echo "build=true" >> "${GITHUB_OUTPUT}"
+            echo "检测到新的上游稳定版本：执行 AppImage 构建。"
+          fi
+
+      - name: Checkout upstream source
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: ${{ steps.upstream.outputs.tag }}
+          path: upstream
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+
+      - name: Use upstream npm baseline
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global npm@12
+          node --version
+          npm --version
+
+      - name: Install upstream dependencies
+        if: steps.gate.outputs.build == 'true'
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Build official Desktop AppImage
+        if: steps.gate.outputs.build == 'true'
+        working-directory: upstream/apps/desktop
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          set -euo pipefail
+
+          npm run build
+          npm run builder -- --linux AppImage --x64 --publish never
+
+      - name: Prepare and verify AppImage
+        if: steps.gate.outputs.build == 'true'
+        id: asset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t appimages < <(find upstream/apps/desktop/release \
+            -maxdepth 1 -type f -name '*.AppImage' -print)
+
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "预期得到 1 个 AppImage，实际得到 ${#appimages[@]} 个。"
+            printf '%s\n' "${appimages[@]}"
+            exit 1
+          fi
+
+          mkdir -p dist
+          asset="dist/Hermes-Desktop-linux-x86_64.AppImage"
+          install -m 0755 "${appimages[0]}" "${asset}"
+
+          test -s "${asset}"
+          file "${asset}" | grep -q 'ELF 64-bit'
+
+          appimage_offset="$("${asset}" --appimage-offset)"
+          [[ "${appimage_offset}" =~ ^[0-9]+$ ]]
+          (( appimage_offset > 0 ))
+
+          echo "path=${asset}" >> "${GITHUB_OUTPUT}"
+          sha256sum "${asset}"
+
+      - name: Publish desktop-latest release
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          ASSET_PATH: ${{ steps.asset.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          release_notes="$(cat <<EOF
+          Hermes Desktop Linux x86_64 AppImage，由 NousResearch/hermes-agent 官方源码原样构建。
+
+          UPSTREAM_REPO=NousResearch/hermes-agent
+          UPSTREAM_TAG=${UPSTREAM_TAG}
+          ARCH=x86_64
+
+          该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产；Desktop 应用源码和构建脚本均来自对应上游稳定 Release。
+          EOF
+          )"
+
+          if gh release view desktop-latest --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload desktop-latest "${ASSET_PATH}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+
+            gh release edit desktop-latest \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Hermes Desktop AppImage (${UPSTREAM_TAG})" \
+              --notes "${release_notes}"
+          else
+            gh release create desktop-latest "${ASSET_PATH}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" \
+              --title "Hermes Desktop AppImage (${UPSTREAM_TAG})" \
+              --notes "${release_notes}" \
+              --latest
+          fi
