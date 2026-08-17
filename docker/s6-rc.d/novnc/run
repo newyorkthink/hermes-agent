@@ -22,6 +22,12 @@ case "${vnc_bind}" in
     *) vnc_target="${vnc_bind}" ;;
 esac
 
+# noVNC 没有单独的登录密码，认证仍使用 VNC_PASSWORD。
+# 根路径直接进入 noVNC 客户端，避免 websockify 显示静态目录列表；若上游以后提供 index.html，则保留上游文件。
+if [ ! -e /usr/share/novnc/index.html ] && [ ! -L /usr/share/novnc/index.html ]; then
+    ln -s vnc.html /usr/share/novnc/index.html
+fi
+
 exec s6-setuidgid hermes websockify \
     --web=/usr/share/novnc \
     "${novnc_bind}:${novnc_port}" \
