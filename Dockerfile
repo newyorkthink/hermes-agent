@@ -1,26 +1,3 @@
-FROM nousresearch/hermes-agent:latest AS pulseaudio-xrdp-builder
-
-# 在独立构建阶段编译官方 PulseAudio xrdp 音频模块；固定使用稳定版 v0.8，避免把构建依赖带入最终镜像。
-ARG PULSEAUDIO_XRDP_VERSION=v0.8
-USER root
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        sudo git ca-certificates lsb-release build-essential autoconf automake libtool pkg-config doxygen \
-        libpulse-dev libltdl-dev pulseaudio && \
-    git clone --depth 1 --branch "${PULSEAUDIO_XRDP_VERSION}" \
-        https://github.com/neutrinolabs/pulseaudio-module-xrdp.git /tmp/pulseaudio-module-xrdp && \
-    cd /tmp/pulseaudio-module-xrdp && \
-    ./scripts/install_pulseaudio_sources_apt.sh -d /tmp/pulseaudio.src && \
-    ./bootstrap && \
-    ./configure PULSE_DIR=/tmp/pulseaudio.src && \
-    make -j"$(nproc)" && \
-    make DESTDIR=/tmp/pulseaudio-xrdp-root install && \
-    mkdir -p /tmp/pulseaudio-xrdp-root/usr/local/share/hermes && \
-    dpkg-query -W -f='${Version}\n' pulseaudio > /tmp/pulseaudio-xrdp-root/usr/local/share/hermes/pulseaudio-xrdp-build-version && \
-    test -n "$(find /tmp/pulseaudio-xrdp-root -type f -name 'module-xrdp-sink.so' -print -quit)" && \
-    test -n "$(find /tmp/pulseaudio-xrdp-root -type f -name 'module-xrdp-source.so' -print -quit)" && \
-    test -x /tmp/pulseaudio-xrdp-root/usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh
-
 FROM nousresearch/hermes-agent:latest
 
 # 记录本次构建使用的上游镜像 digest，供定时任务判断上游是否已经更新。
@@ -55,19 +32,15 @@ RUN apt-get update && \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
-        pulseaudio desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
+        pipewire pipewire-pulse wireplumber pipewire-module-xrdp pulseaudio-utils desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
         libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme adwaita-icon-theme-legacy breeze-icon-theme lxde-icon-theme \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
 
-# 复制与最终镜像 PulseAudio 版本匹配的 xrdp 音频模块；RDP 音频通过虚拟通道转发，不需要映射宿主机声卡设备。
-COPY --from=pulseaudio-xrdp-builder /tmp/pulseaudio-xrdp-root/ /
-RUN test "$(dpkg-query -W -f='${Version}' pulseaudio)" = "$(cat /usr/local/share/hermes/pulseaudio-xrdp-build-version)" && \
-    test -n "$(find /usr/lib -type f -name 'module-xrdp-sink.so' -print -quit)" && \
-    test -n "$(find /usr/lib -type f -name 'module-xrdp-source.so' -print -quit)" && \
-    test -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh && \
-    test -f /etc/xdg/autostart/pulseaudio-xrdp.desktop
+# Debian 13 原生提供 PipeWire xrdp 音频模块；直接使用发行版维护的模块和加载脚本，避免继续依赖 PulseAudio 内部模块 API。
+RUN test -x /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh && \
+    test -n "$(find /usr/lib -type f -name 'libpipewire-module-xrdp.so' -print -quit)"
 
 # 配置中文 UTF-8 环境；不创建额外的固定密码用户，RDP 直接使用上游 hermes 用户。
 RUN sed -i '/zh_CN.UTF-8/s/^# //g' /etc/locale.gen && \
@@ -127,11 +100,14 @@ EXPOSE 3389 5900 6080
 # 构建期检查远程桌面、RDP 音频、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
-    command -v pulseaudio >/dev/null && \
+    command -v pipewire >/dev/null && \
+    command -v pipewire-pulse >/dev/null && \
+    command -v wireplumber >/dev/null && \
+    command -v pw-cli >/dev/null && \
+    command -v pw-metadata >/dev/null && \
     command -v pactl >/dev/null && \
-    test -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh && \
-    test -n "$(find /usr/lib -type f -name 'module-xrdp-sink.so' -print -quit)" && \
-    test -n "$(find /usr/lib -type f -name 'module-xrdp-source.so' -print -quit)" && \
+    test -x /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh && \
+    test -n "$(find /usr/lib -type f -name 'libpipewire-module-xrdp.so' -print -quit)" && \
     command -v Xvfb >/dev/null && \
     command -v x11vnc >/dev/null && \
     command -v websockify >/dev/null && \

@@ -68,19 +68,51 @@ exec dbus-run-session -- sh -c '
         fi
     fi
 
-    # Debian 13 默认关闭 PulseAudio 客户端 autospawn，当前 Openbox 会话也没有 systemd --user；先显式启动会话级 PulseAudio，再加载官方 xrdp 音频模块。
-    if ! pactl info >/dev/null 2>&1; then
-        pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || echo "[xrdp] PulseAudio 会话服务启动失败，桌面继续启动。" >&2
-    fi
+    # Debian 13 使用发行版维护的 PipeWire xrdp 模块；当前 Openbox 会话没有 systemd --user，因此为每个 RDP display 建立独立运行目录并显式启动 PipeWire 会话服务。
+    display_id="${DISPLAY#:}"
+    display_id="${display_id%%.*}"
+    export XDG_RUNTIME_DIR="/tmp/hermes-xrdp-runtime-${display_id}"
+    mkdir -p "$XDG_RUNTIME_DIR" "$HOME/.cache/hermes"
+    chmod 700 "$XDG_RUNTIME_DIR"
 
-    if pactl info >/dev/null 2>&1; then
-        if [ -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh ]; then
-            /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh || echo "[xrdp] PulseAudio xrdp 音频模块加载失败，桌面继续启动。" >&2
+    pipewire_pid=""
+    wireplumber_pid=""
+    pipewire_pulse_pid=""
+
+    pipewire >"$HOME/.cache/hermes/pipewire-${display_id}.log" 2>&1 &
+    pipewire_pid=$!
+
+    i=0
+    while ! pw-cli info 0 >/dev/null 2>&1; do
+        i=$((i + 1))
+        [ "$i" -ge 50 ] && break
+        sleep 0.1
+    done
+
+    if pw-cli info 0 >/dev/null 2>&1; then
+        wireplumber >"$HOME/.cache/hermes/wireplumber-${display_id}.log" 2>&1 &
+        wireplumber_pid=$!
+        pipewire-pulse >"$HOME/.cache/hermes/pipewire-pulse-${display_id}.log" 2>&1 &
+        pipewire_pulse_pid=$!
+
+        i=0
+        while ! pactl info >/dev/null 2>&1; do
+            i=$((i + 1))
+            [ "$i" -ge 50 ] && break
+            sleep 0.1
+        done
+
+        if pactl info >/dev/null 2>&1; then
+            if [ -x /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh ]; then
+                /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh || echo "[xrdp] PipeWire xrdp 音频模块加载失败，桌面继续启动。" >&2
+            else
+                echo "[xrdp] PipeWire xrdp 音频模块加载脚本不存在，桌面继续启动。" >&2
+            fi
         else
-            echo "[xrdp] PulseAudio xrdp 音频模块加载脚本不存在，桌面继续启动。" >&2
+            echo "[xrdp] PipeWire PulseAudio 兼容服务不可用，RDP 音频不可用，桌面继续启动。" >&2
         fi
     else
-        echo "[xrdp] PulseAudio 会话服务不可用，RDP 音频不可用，桌面继续启动。" >&2
+        echo "[xrdp] PipeWire 会话服务不可用，RDP 音频不可用，桌面继续启动。" >&2
     fi
 
     fcitx5 -d >/dev/null 2>&1 || true
@@ -99,4 +131,8 @@ exec dbus-run-session -- sh -c '
     tint2 &
 
     wait "$wm_pid"
+
+    [ -z "$pipewire_pulse_pid" ] || kill "$pipewire_pulse_pid" 2>/dev/null || true
+    [ -z "$wireplumber_pid" ] || kill "$wireplumber_pid" 2>/dev/null || true
+    [ -z "$pipewire_pid" ] || kill "$pipewire_pid" 2>/dev/null || true
 '
