@@ -9,7 +9,7 @@
 - 办公与文档：`libreoffice`、`libreoffice-gtk3`、`libreoffice-l10n-zh-cn`、`pandoc`、`poppler-utils`、`ghostscript`
 - 图像与媒体：`ffmpeg`、`imagemagick`、`sox`、`tesseract-ocr`、`tesseract-ocr-eng`、`tesseract-ocr-chi-sim`、`exiftool`
 - 浏览器：`google-chrome-stable`、`firefox-esr`
-- 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
+- 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`xfce4-appfinder`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
@@ -18,7 +18,7 @@
 - 网络与系统工具：`curl`、`wget`、`git`、`procps`、`net-tools`、`iputils-ping`、`iproute2`、`iptables`、`dnsutils`、`socat`、`netcat-openbsd`、`whois`
 - 加密与证书工具：`openssl`、`gnupg`
 - 开发与底层依赖：`build-essential`、`pkg-config`、`libssl-dev`、`libffi-dev`、`libxml2-dev`、`libxslt1-dev`、`libjpeg-dev`、`libpng-dev`、`libwebp-dev`、`libmagic-dev`、`sqlite3`、`libsqlite3-dev`
-- 桌面运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
+- 桌面运行基础：`sudo`、`pulseaudio`、`desktop-file-utils`、`xdg-utils`、`xdg-user-dirs`、`libglib2.0-bin`、`menu`、`lxappearance`、`libgtk2.0-0t64`、`libayatana-appindicator3-1`、`libxcb-cursor0`、`qt5ct`、`qt6ct`
 - 基础环境：`locales`、`ca-certificates`、`tzdata`
 
 仓库中不保存任何固定远程桌面密码、Token、私钥、IP 或其他私有配置。
@@ -58,12 +58,13 @@ nousresearch/hermes-agent:latest
 RDP 与 VNC 使用同一套轻量桌面结构：
 
 ```text
-Openbox     窗口管理器
-tint2       面板 / 任务栏
-xfdesktop   桌面背景、桌面文件和特殊桌面图标
-Konqueror   主文件管理入口
-Thunar      xfdesktop 的文件管理首选应用和桌面特殊图标打开程序
-LXTask      轻量图形任务管理器
+Openbox             窗口管理器
+tint2               面板 / 任务栏
+xfdesktop           桌面背景、桌面文件和特殊桌面图标
+Application Finder  应用程序搜索与启动入口
+Konqueror           主文件管理入口
+Thunar              xfdesktop 的文件管理首选应用和桌面特殊图标打开程序
+LXTask              轻量图形任务管理器
 ```
 
 PCManFM 已移除，不再安装或启动。
@@ -78,6 +79,26 @@ TerminalEmulator=xfce4-terminal
 ```
 
 若 `/opt/data/.config/xfce4/helpers.rc` 已经存在其他终端选择，则不会覆盖；仅会把本镜像此前写入的 `debian-x-terminal-emulator` 默认值迁移为 `xfce4-terminal`。
+
+### 应用程序启动器
+
+镜像安装 `xfce4-appfinder`，用于读取系统和用户的 `.desktop` 文件，按分类显示、搜索并启动已安装的 GUI 程序。
+
+首次进入 RDP 或 VNC 桌面会话时，会按 `xdg-user-dir DESKTOP` 返回的实际桌面目录创建一个“应用程序”启动器，来源为：
+
+```text
+/usr/share/applications/xfce4-appfinder.desktop
+```
+
+启动器使用可执行权限，并通过 `gio` 尝试写入 Xfce/Thunar 使用的 trusted 元数据。初始化标记保存为：
+
+```text
+/opt/data/.config/hermes/appfinder-launcher-v1
+```
+
+只初始化一次：已有同名桌面文件不会覆盖；初始化完成后，如果用户主动删除桌面上的启动器，也不会在每次登录时重新生成。
+
+Application Finder 只会列出具有可见 `.desktop` 入口的程序；纯命令行工具、`NoDisplay=true` 或没有 `.desktop` 文件的程序不会因为安装了 Application Finder 就自动出现在列表中。
 
 ### 主题和图标
 
@@ -111,7 +132,7 @@ LC_ALL=zh_CN.UTF-8
 
 浏览器、Fcitx5、Openbox、xfdesktop、tint2、Konqueror、Thunar 等用户配置都写入 `/opt/data`。运行容器时应把宿主机持久化目录挂载到 `/opt/data`。
 
-xfdesktop 显示 `~/Desktop` 中实际存在的文件、目录和启动器，并显示启用的特殊桌面图标；不会自动把所有已安装 GUI 程序复制到桌面。
+xfdesktop 显示实际桌面目录中存在的文件、目录和启动器，并显示启用的特殊桌面图标；不会自动把所有已安装 GUI 程序复制到桌面。实际桌面目录由 `xdg-user-dir DESKTOP` 决定，中文环境下不应在脚本中写死为 `~/Desktop`。
 
 ## RDP
 
@@ -175,7 +196,7 @@ VNC_DISPLAY=:99
 VNC_GEOMETRY=1920x1080
 ```
 
-VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 显式禁用 IPv6 监听。
+VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 同时使用 `-no6` 和 `-noipv6`，关闭编译时默认的 IPv6 listener 以及其他 IPv6 socket，避免在 host 网络模式下额外占用默认 VNC 端口。
 
 可以关闭相应远程服务：
 
@@ -209,6 +230,16 @@ docker run -d \
 公网环境不要直接暴露远程桌面端口，优先通过防火墙、VPN 或可信内网限制访问范围。
 
 ## 常见问题
+
+### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
+
+这是 xfdesktop 的正常行为：它显示实际桌面目录中的文件/启动器和启用的特殊图标，不会把 `/usr/share/applications` 中所有 GUI 程序自动复制到桌面。
+
+当前镜像提供 `xfce4-appfinder`，并在首次桌面会话创建一个“应用程序”启动器。打开它后可以按分类浏览或搜索具有 `.desktop` 入口的 GUI 程序。
+
+### `xfce4-appfinder: not found`
+
+说明当前运行的还是未包含 Application Finder 的旧镜像。新镜像构建完成并重新拉取、重新创建容器后，`xfce4-appfinder` 命令和 `/usr/share/applications/xfce4-appfinder.desktop` 应同时存在。
 
 ### xfdesktop 左上角“主文件夹 / 文件系统 / 共享设备”点了没反应
 
@@ -264,12 +295,26 @@ XMODIFIERS=@im=fcitx
 
 并启动 `fcitx5`。构建阶段还会检查 GTK3 输入模块、拼音模块、拼音配置和 Fcitx5 图标资源。
 
+## 设计取舍与已处理问题
+
+- 当前不是完整 Xfce 桌面。窗口管理器固定为 Openbox，面板固定为 tint2，只借用 `xfdesktop`、Thunar helper、`xfce4-terminal` 和 `xfce4-appfinder` 完成桌面集成；不引入 `xfce4-panel`，避免和 tint2 重复。
+- 不使用 `nwg-drawer`。当前远程桌面是 X11/Openbox，而 `nwg-drawer` 面向 wlroots/Wayland；应用程序启动统一使用 `xfce4-appfinder`。
+- PCManFM 已从桌面链路移除。Konqueror 保持主文件管理入口，Thunar 只承担 xfdesktop/Xfce helper 所需职责，避免多个文件管理器同时争用桌面管理角色。
+- xfdesktop 接管根窗口后，桌面右键由 xfdesktop 处理，不应再把 Openbox 根菜单当作主要应用入口；Openbox 自定义应用菜单仍保留，Application Finder 作为更直接的图形启动入口。
+- `HOME=/opt/data` 是 RDP/VNC 的统一持久化基线。启动脚本只初始化缺失值和迁移本镜像明确写入过的旧默认值，不覆盖已有用户选择。
+- GTK 深色主题、Openbox 窗口主题和图标主题分离处理，避免深色界面把应用和菜单图标一起替换成难辨认的黑色 symbolic 图标。
+- RDP 与 VNC 使用同一套桌面组件，但不是同一个显示会话：RDP 是 xorgxrdp 创建的 Xorg 会话，VNC 是独立 Xvfb `:99` 会话。
+- x11vnc 之前仅使用 `-noipv6` 时仍可能出现额外 IPv6 listener；在 `network_mode: host` 下会直接占用宿主机端口。当前同时使用 `-no6` 和 `-noipv6`，避免默认 5900 与宿主机其他 VNC 服务冲突。
+- `xdg-user-dirs` 负责桌面目录本地化，脚本通过 `xdg-user-dir DESKTOP` 获取实际路径，不写死英文 `~/Desktop`。
+- 桌面启动器只做一次性初始化。这样既能给首次使用者一个可点击的应用入口，又不会在用户后续主动删除或自定义桌面后反复写回。
+
 ## 构建期验证
 
 Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令缺失都会直接使构建失败：
 
 - xrdp / Xorg / Xvfb / x11vnc / noVNC
 - Openbox / tint2 / xfdesktop
+- `xfce4-appfinder`、`xdg-user-dirs`、`gio`
 - Thunar、Xfce FileManager helper、`xfce4-terminal`
 - LibreOffice 简体中文语言包
 - Konqueror / `kfmclient`

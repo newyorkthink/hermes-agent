@@ -21,6 +21,22 @@ export DESKTOP_SESSION=openbox
 exec dbus-run-session -- sh -c '
     command -v xdg-user-dirs-update >/dev/null 2>&1 && xdg-user-dirs-update >/dev/null 2>&1 || true
 
+    # 首次创建应用程序启动器桌面入口；不覆盖同名文件，初始化完成后用户删除也不会反复生成。
+    appfinder_marker="$HOME/.config/hermes/appfinder-launcher-v1"
+    if [ ! -e "$appfinder_marker" ]; then
+        desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+        if [ -n "$desktop_dir" ] && [ -f /usr/share/applications/xfce4-appfinder.desktop ]; then
+            mkdir -p "$desktop_dir" "$(dirname "$appfinder_marker")"
+            launcher="$desktop_dir/应用程序.desktop"
+            if [ -e "$launcher" ]; then
+                : > "$appfinder_marker"
+            elif install -m 0755 /usr/share/applications/xfce4-appfinder.desktop "$launcher"; then
+                gio set -t string "$launcher" metadata::trusted true >/dev/null 2>&1 || true
+                : > "$appfinder_marker"
+            fi
+        fi
+    fi
+
     # 仅迁移未修改的 Debian 默认 Openbox 菜单；用户自定义菜单保持原样。
     user_openbox_menu="$HOME/.config/openbox/menu.xml"
     stock_openbox_menu="/usr/local/share/hermes/openbox-menu.debian.xml"

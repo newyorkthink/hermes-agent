@@ -16,7 +16,7 @@ RUN apt-get update && \
         libreoffice libreoffice-gtk3 libreoffice-l10n-zh-cn pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox tint2 xfdesktop4 thunar xfce4-helpers xfce4-terminal konqueror lxtask mousepad lxterminal xterm firefox-esr \
+        openbox tint2 xfdesktop4 thunar xfce4-helpers xfce4-terminal xfce4-appfinder konqueror lxtask mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
@@ -32,7 +32,7 @@ RUN apt-get update && \
         sqlite3 libsqlite3-dev \
         sudo dbus-x11 at-spi2-core xdotool wmctrl scrot \
         fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-frontend-qt6 im-config \
-        pulseaudio desktop-file-utils xdg-utils menu lxappearance \
+        pulseaudio desktop-file-utils xdg-utils xdg-user-dirs libglib2.0-bin menu lxappearance \
         libgtk2.0-0t64 libayatana-appindicator3-1 adwaita-icon-theme adwaita-icon-theme-legacy breeze-icon-theme lxde-icon-theme \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
@@ -93,7 +93,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、桌面组件、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
+# 构建期检查远程桌面、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v Xvfb >/dev/null && \
@@ -104,9 +104,14 @@ RUN command -v xrdp >/dev/null && \
     command -v xfdesktop >/dev/null && \
     command -v thunar >/dev/null && \
     command -v xfce4-terminal >/dev/null && \
+    command -v xfce4-appfinder >/dev/null && \
+    command -v xdg-user-dir >/dev/null && \
+    command -v xdg-user-dirs-update >/dev/null && \
+    command -v gio >/dev/null && \
     command -v lxtask >/dev/null && \
     command -v python3 >/dev/null && \
     test -x /usr/local/bin/hermes-openbox-app-menu && \
+    test -f /usr/share/applications/xfce4-appfinder.desktop && \
     test -f /usr/share/xfce4/helpers/thunar.desktop && \
     test -f /usr/share/xfce4/helpers/xfce4-terminal.desktop && \
     dpkg-query -W -f='${Status}\n' libreoffice-l10n-zh-cn 2>/dev/null | grep -q '^install ok installed$' && \
