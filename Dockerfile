@@ -61,10 +61,21 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
 
-# Hermes Desktop 的麦克风录音会发送到后端 /api/audio/transcribe；上游 Docker 默认不预装本地 faster-whisper。
-# 直接将官方 voice extra 使用的 faster-whisper 版本装入 Hermes 自带 venv，避免首次转写时再临时安装依赖。
-RUN uv pip install --python /opt/hermes/.venv/bin/python "faster-whisper==1.2.1" && \
-    /opt/hermes/.venv/bin/python -c 'from faster_whisper import WhisperModel; print("faster-whisper OK")'
+# Hermes Desktop 按键录音使用 faster-whisper；默认 Wake word 在 Linux 上使用 openWakeWord 的 ONNX 后端。
+# 依赖版本取自 Hermes v0.20.2 的 uv.lock；先锁齐 ONNX 运行依赖，再跳过 openwakeword 在 Linux 上声明但 CPython 3.13 无可用 wheel、且 ONNX 后端不使用的 tflite-runtime。
+RUN /opt/hermes/.venv/bin/python -c 'from pathlib import Path; import tomllib; from packaging.markers import Marker; lock=tomllib.loads(Path("/opt/hermes/uv.lock").read_text(encoding="utf-8")); selected=[p for p in lock["package"] if "registry" in p.get("source",{}) and (not p.get("resolution-markers") or any(Marker(m).evaluate() for m in p["resolution-markers"]))]; assert len({p["name"] for p in selected}) == len(selected), "duplicate active package versions in uv.lock"; Path("/tmp/hermes-uv-lock-constraints.txt").write_text("\n".join(sorted(f"{p['"'"'name'"'"']}=={p['"'"'version'"'"']}" for p in selected))+"\n", encoding="utf-8")' && \
+    uv pip install --python /opt/hermes/.venv/bin/python --constraint /tmp/hermes-uv-lock-constraints.txt \
+        "faster-whisper==1.2.1" \
+        "onnxruntime==1.27.0" \
+        "sounddevice==0.5.5" \
+        "numpy==2.4.3" \
+        "requests==2.33.0" \
+        "scikit-learn==1.9.0" \
+        "scipy==1.18.0" \
+        "tqdm==4.67.3" && \
+    uv pip install --python /opt/hermes/.venv/bin/python --no-deps "openwakeword==0.6.0" && \
+    /opt/hermes/.venv/bin/python -c 'from importlib.metadata import distributions, version; from pathlib import Path; from packaging.utils import canonicalize_name; locked=dict(line.rsplit("==",1) for line in Path("/tmp/hermes-uv-lock-constraints.txt").read_text(encoding="utf-8").splitlines()); locked={canonicalize_name(name):value for name,value in locked.items()}; actual={canonicalize_name(dist.metadata["Name"]):dist.version for dist in distributions() if dist.metadata.get("Name")}; drift={name:(value,locked[name]) for name,value in actual.items() if name in locked and value != locked[name]}; assert not drift, drift; from faster_whisper import WhisperModel; import numpy, onnxruntime, openwakeword, requests, scipy, sklearn, sounddevice, tqdm; expected={"faster-whisper":"1.2.1","openwakeword":"0.6.0","onnxruntime":"1.27.0","sounddevice":"0.5.5","numpy":"2.4.3","requests":"2.33.0","scikit-learn":"1.9.0","scipy":"1.18.0","tqdm":"4.67.3"}; installed={name:version(name) for name in expected}; assert installed == expected, (installed,expected); print("Hermes voice and wake-word dependencies OK")' && \
+    rm -f /tmp/hermes-uv-lock-constraints.txt
 
 # 复制与最终镜像 PulseAudio 版本匹配的 xrdp 音频模块；RDP 音频通过虚拟通道转发，不需要映射宿主机声卡设备。
 COPY --from=pulseaudio-xrdp-builder /tmp/pulseaudio-xrdp-root/ /
