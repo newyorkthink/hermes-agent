@@ -16,7 +16,7 @@ RUN apt-get update && \
         libreoffice libreoffice-gtk3 pandoc poppler-utils ghostscript \
         xvfb x11vnc novnc websockify xrdp xorgxrdp \
         xserver-xorg-core xserver-xorg xinit xauth x11-utils x11-xserver-utils \
-        openbox tint2 konqueror mousepad lxterminal xterm firefox-esr \
+        openbox tint2 konqueror xfdesktop4 lxtask mousepad lxterminal xterm firefox-esr \
         ffmpeg imagemagick sox \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu \
