@@ -49,6 +49,7 @@ nousresearch/hermes-agent:latest
 
 - 每 6 小时检查一次上游镜像 digest；未变化时跳过完整构建，发生变化时重新构建并覆盖 `latest`。
 - `main` 分支的 `Dockerfile`、`docker/**`、`.dockerignore`、`.github/workflows/build.yml` 发生变化时自动构建。
+- `README.md` 仅为文档，不在 push 构建路径中；单独修改 README 不会触发镜像构建。
 - 支持 `workflow_dispatch` 手动触发。
 - 构建时把实际使用的上游 digest 写入镜像元数据。
 - workflow 使用并发队列，不主动取消正在运行的构建。
@@ -183,7 +184,7 @@ VNC 密码：
 VNC_PASSWORD
 ```
 
-未设置时 x11vnc 与 noVNC 不提供可连接的桌面会话，不回退到无密码模式。
+noVNC 没有独立登录密码，网页端连接到 x11vnc 后仍使用同一个 `VNC_PASSWORD` 进行认证。未设置 `VNC_PASSWORD` 时，x11vnc 与 noVNC 都不会提供可连接的桌面会话，也不会回退到无密码模式。
 
 默认：
 
@@ -197,6 +198,10 @@ VNC_GEOMETRY=1920x1080
 ```
 
 VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是同一个桌面。Xvfb 启动前会检查显示号并只在确认不可用时清理残留锁文件；x11vnc 同时使用 `-no6` 和 `-noipv6`，关闭编译时默认的 IPv6 listener 以及其他 IPv6 socket，避免在 host 网络模式下额外占用默认 VNC 端口。
+
+noVNC 由 websockify 提供静态网页和 WebSocket 转发。当前启动脚本仅在 `/usr/share/novnc/index.html` 不存在时创建指向 `vnc.html` 的符号链接，因此直接访问 noVNC 根地址即可进入客户端，不再显示静态目录列表；如果上游以后自带 `index.html`，则保留上游文件。
+
+当前已知限制：noVNC 浏览器链路中的中文剪贴板复制/粘贴可能出现乱码。该问题作为现有 x11vnc/noVNC 剪贴板兼容性限制保留，不修改中文 locale，也不为此切换 VNC 后端；RDP、VNC 和 noVNC 的现有远程桌面架构保持不变。
 
 可以关闭相应远程服务：
 
@@ -230,6 +235,18 @@ docker run -d \
 公网环境不要直接暴露远程桌面端口，优先通过防火墙、VPN 或可信内网限制访问范围。
 
 ## 常见问题
+
+### noVNC 访问根地址出现 `Directory listing for /`
+
+这是旧镜像直接把 `/usr/share/novnc` 作为 websockify 静态目录时的表现。当前启动脚本在上游没有 `index.html` 时创建 `index.html -> vnc.html`，因此访问 noVNC 根地址会直接进入客户端；不需要手动补 `/vnc.html`。
+
+### noVNC 是否有单独密码
+
+没有。noVNC 只是网页客户端和 WebSocket 转发层，认证继续使用 `VNC_PASSWORD`。
+
+### noVNC 复制中文为什么可能乱码
+
+这是当前 x11vnc/noVNC 剪贴板链路的已知兼容性限制，不是缺少中文 locale。现阶段只记录该限制，不修改已经可用的 RDP/VNC/noVNC 架构，也不为单一剪贴板问题切换到其他 VNC 后端。
 
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
@@ -305,6 +322,8 @@ XMODIFIERS=@im=fcitx
 - GTK 深色主题、Openbox 窗口主题和图标主题分离处理，避免深色界面把应用和菜单图标一起替换成难辨认的黑色 symbolic 图标。
 - RDP 与 VNC 使用同一套桌面组件，但不是同一个显示会话：RDP 是 xorgxrdp 创建的 Xorg 会话，VNC 是独立 Xvfb `:99` 会话。
 - x11vnc 之前仅使用 `-noipv6` 时仍可能出现额外 IPv6 listener；在 `network_mode: host` 下会直接占用宿主机端口。当前同时使用 `-no6` 和 `-noipv6`，避免默认 5900 与宿主机其他 VNC 服务冲突。
+- noVNC 没有独立密码，统一使用 `VNC_PASSWORD`；根地址通过 `index.html -> vnc.html` 直接进入客户端，不再暴露静态目录列表。
+- noVNC 中文剪贴板乱码作为已知兼容性限制保留。当前 RDP、VNC、noVNC 均可正常作为远程桌面使用，因此不为该单一问题替换 x11vnc 或切换到 TigerVNC/x0vncserver，避免破坏现有稳定架构。
 - `xdg-user-dirs` 负责桌面目录本地化，脚本通过 `xdg-user-dir DESKTOP` 获取实际路径，不写死英文 `~/Desktop`。
 - 桌面启动器只做一次性初始化。这样既能给首次使用者一个可点击的应用入口，又不会在用户后续主动删除或自定义桌面后反复写回。
 
