@@ -510,7 +510,7 @@ jobs:
 
             LANG=zh_CN.UTF-8 \
             HERMES_DESKTOP_SAFE_STORAGE_SMOKE_TEST=1 \
-            xvfb-run -a "$2" --no-sandbox
+            xvfb-run -a "$2" --appimage-extract-and-run --no-sandbox
           ' bash "${smoke_home}" "${asset_abs}" 2>&1 | tee /tmp/hermes-appimage-smoke.log
 
           grep -Fq '[hermes] standalone AppImage detected password-store backend: gnome-libsecret' \
