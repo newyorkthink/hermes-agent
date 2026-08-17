@@ -38,6 +38,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
 
+# Hermes Desktop 的麦克风录音会发送到后端 /api/audio/transcribe；上游 Docker 默认不预装本地 faster-whisper。
+# 直接将官方 voice extra 使用的 faster-whisper 版本装入 Hermes 自带 venv，避免首次转写时再临时安装依赖。
+RUN uv pip install --python /opt/hermes/.venv/bin/python "faster-whisper==1.2.1" && \
+    /opt/hermes/.venv/bin/python -c 'from faster_whisper import WhisperModel; print("faster-whisper OK")'
+
 # Debian 13 原生提供 PipeWire xrdp 音频模块；直接使用发行版维护的模块和加载脚本，避免继续依赖 PulseAudio 内部模块 API。
 RUN test -x /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh && \
     test -n "$(find /usr/lib -type f -name 'libpipewire-module-xrdp.so' -print -quit)"
