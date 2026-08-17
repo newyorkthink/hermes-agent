@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 env:
-  DESKTOP_BUILD_REVISION: '2'
+  DESKTOP_BUILD_REVISION: '3'
 
 jobs:
   build:
@@ -130,6 +130,40 @@ jobs:
           set -euo pipefail
           npm ci
 
+      - name: Install Linux packaging and smoke-test dependencies
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dbus-x11 \
+            gnome-keyring \
+            libsecret-1-0 \
+            patchelf \
+            xauth \
+            xvfb
+
+      - name: Stage bundled libsecret runtime
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          libsecret_path="$(ldconfig -p | awk '$1 == "libsecret-1.so.0" { print $NF; exit }')"
+          [[ -n "${libsecret_path}" && -f "${libsecret_path}" ]] || {
+            echo "找不到 libsecret-1.so.0，停止构建。"
+            exit 1
+          }
+
+          install -Dm0644 "$(readlink -f "${libsecret_path}")" \
+            upstream/apps/desktop/build/linux-libs/libsecret-1.so.0
+
+          file upstream/apps/desktop/build/linux-libs/libsecret-1.so.0
+          ldd upstream/apps/desktop/build/linux-libs/libsecret-1.so.0 | tee /tmp/hermes-libsecret-ldd.log
+          ! grep -Fq 'not found' /tmp/hermes-libsecret-ldd.log
+
       - name: Apply standalone Linux AppImage fixes
         if: steps.gate.outputs.build == 'true'
         working-directory: upstream
@@ -138,6 +172,7 @@ jobs:
           set -euo pipefail
 
           python3 <<'PY'
+          import json
           from pathlib import Path
 
           main_path = Path("apps/desktop/electron/main.ts")
@@ -194,7 +229,71 @@ jobs:
 
           '''
               main_text = main_text.replace(anchor, keyring_patch + anchor, 1)
-              main_path.write_text(main_text, encoding="utf-8")
+
+          locale_marker = "Hermes standalone Linux AppImage: map a Chinese system locale to Chromium zh-CN"
+          if locale_marker not in main_text:
+              anchor = "// Renderer debugging port. On for dev-server runs"
+              if anchor not in main_text:
+                  raise SystemExit("无法定位 Electron locale 初始化位置，停止构建，避免错误修改上游源码。")
+
+              locale_patch = r'''// Hermes standalone Linux AppImage: map a Chinese system locale to Chromium zh-CN.
+          // This keeps the first-run / remote-connection UI consistent with a zh_CN Linux
+          // environment before Hermes has loaded a persisted display.language setting.
+          if (process.platform === 'linux') {
+            const systemLocale = String(
+              process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || ''
+            ).trim()
+
+            if (/^zh(?:[_-]|$)/i.test(systemLocale)) {
+              app.commandLine.appendSwitch('lang', 'zh-CN')
+              console.log(`[hermes] standalone AppImage mapped Linux locale ${systemLocale} to zh-CN`)
+            }
+          }
+
+          '''
+              main_text = main_text.replace(anchor, locale_patch + anchor, 1)
+
+          smoke_marker = "HERMES_DESKTOP_SAFE_STORAGE_SMOKE_TEST"
+          if smoke_marker not in main_text:
+              anchor = "// Windows sandbox / GPU breakpoint crash recovery"
+              if anchor not in main_text:
+                  raise SystemExit("无法定位 safeStorage smoke-test 插入位置，停止构建，避免错误修改上游源码。")
+
+              smoke_patch = r'''// CI-only runtime verification for the final standalone AppImage.
+          // It is inert during normal launches and exits immediately after checking the
+          // selected backend, real encrypt/decrypt round-trip, and Chinese locale mapping.
+          if (process.env.HERMES_DESKTOP_SAFE_STORAGE_SMOKE_TEST === '1') {
+            app
+              .whenReady()
+              .then(() => {
+                const backend = safeStorage.getSelectedStorageBackend()
+                const available = safeStorage.isEncryptionAvailable()
+                const locale = app.getLocale()
+                console.log(`[hermes-smoke] safeStorage backend=${backend} encryptionAvailable=${available}`)
+                console.log(`[hermes-smoke] appLocale=${locale}`)
+
+                if (backend !== 'gnome_libsecret' || !available || !locale.toLowerCase().startsWith('zh')) {
+                  app.exit(91)
+                  return
+                }
+
+                const original = 'hermes-safe-storage-smoke-test'
+                const encrypted = safeStorage.encryptString(original)
+                const decrypted = safeStorage.decryptString(encrypted)
+                const roundTrip = decrypted === original
+                console.log(`[hermes-smoke] safeStorage roundTrip=${roundTrip}`)
+                app.exit(roundTrip ? 0 : 92)
+              })
+              .catch(error => {
+                console.error(`[hermes-smoke] failed: ${String(error)}`)
+                app.exit(93)
+              })
+          }
+
+          '''
+              main_text = main_text.replace(anchor, smoke_patch + anchor, 1)
+
+          main_path.write_text(main_text, encoding="utf-8")
 
           renderer_path = Path("apps/desktop/src/main.tsx")
           renderer_text = renderer_path.read_text(encoding="utf-8")
@@ -223,15 +322,80 @@ jobs:
               context_text = context_text.replace(old_locale_line, new_locale_line, 1)
               context_path.write_text(context_text, encoding="utf-8")
 
+          package_path = Path("apps/desktop/package.json")
+          package_data = json.loads(package_path.read_text(encoding="utf-8"))
+          extra_resources = package_data.setdefault("build", {}).setdefault("extraResources", [])
+          libsecret_resource = {
+              "from": "build/linux-libs/libsecret-1.so.0",
+              "to": "linux-libs/libsecret-1.so.0",
+          }
+          if libsecret_resource not in extra_resources:
+              extra_resources.append(libsecret_resource)
+          package_path.write_text(json.dumps(package_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+          after_pack_path = Path("apps/desktop/scripts/after-pack.mjs")
+          after_pack_text = after_pack_path.read_text(encoding="utf-8")
+          rpath_marker = "Hermes standalone Linux AppImage: add the bundled libsecret directory to Electron RUNPATH"
+
+          if rpath_marker not in after_pack_text:
+              import_anchor = "import path from 'node:path'\n"
+              if import_anchor not in after_pack_text:
+                  raise SystemExit("无法定位 afterPack import，停止构建，避免错误修改上游源码。")
+              after_pack_text = after_pack_text.replace(
+                  import_anchor,
+                  "import { execFile } from 'node:child_process'\n"
+                  "import path from 'node:path'\n"
+                  "import { promisify } from 'node:util'\n",
+                  1,
+              )
+
+              function_anchor = "export default async function afterPack(context) {\n"
+              if function_anchor not in after_pack_text:
+                  raise SystemExit("无法定位 afterPack 函数，停止构建，避免错误修改上游源码。")
+
+              rpath_patch = r'''export default async function afterPack(context) {
+          // Hermes standalone Linux AppImage: add the bundled libsecret directory to Electron RUNPATH.
+          // Chromium loads libsecret with dlopen("libsecret-1.so.0"), so selecting
+          // gnome-libsecret alone is insufficient on hosts where the client library is absent.
+          if (context.electronPlatformName === 'linux') {
+            const productName = context.packager?.appInfo?.productFilename || 'Hermes'
+            const executable = path.join(context.appOutDir, productName)
+            const execFileAsync = promisify(execFile)
+            const { stdout } = await execFileAsync('patchelf', ['--print-rpath', executable])
+            const bundledLibsecretRpath = '$ORIGIN/resources/linux-libs'
+            const existingRpath = stdout.trim()
+            const rpathParts = existingRpath ? existingRpath.split(':').filter(Boolean) : []
+
+            if (!rpathParts.includes(bundledLibsecretRpath)) {
+              rpathParts.push(bundledLibsecretRpath)
+              await execFileAsync('patchelf', ['--set-rpath', rpathParts.join(':'), executable])
+            }
+
+            console.log(`[after-pack] Linux Electron RUNPATH includes ${bundledLibsecretRpath}`)
+            return
+          }
+
+          '''
+              after_pack_text = after_pack_text.replace(function_anchor, rpath_patch, 1)
+              after_pack_path.write_text(after_pack_text, encoding="utf-8")
+
           print("Standalone Linux fixes applied.")
           PY
 
           grep -Fq 'Hermes standalone Linux AppImage: detect the Secret Service/KWallet backend directly' \
             apps/desktop/electron/main.ts
+          grep -Fq 'Hermes standalone Linux AppImage: map a Chinese system locale to Chromium zh-CN' \
+            apps/desktop/electron/main.ts
+          grep -Fq 'HERMES_DESKTOP_SAFE_STORAGE_SMOKE_TEST' \
+            apps/desktop/electron/main.ts
           grep -Fq '<I18nProvider initialLocale={navigator.language}>' \
             apps/desktop/src/main.tsx
           grep -Fq 'configuredLocale == null ? normalizeLocale(initialLocale)' \
             apps/desktop/src/i18n/context.tsx
+          grep -Fq '"to": "linux-libs/libsecret-1.so.0"' \
+            apps/desktop/package.json
+          grep -Fq 'Hermes standalone Linux AppImage: add the bundled libsecret directory to Electron RUNPATH' \
+            apps/desktop/scripts/after-pack.mjs
 
       - name: Type-check patched Desktop source
         if: steps.gate.outputs.build == 'true'
@@ -253,7 +417,7 @@ jobs:
           npm run build
           npm run builder -- --linux AppImage --x64 --publish never
 
-      - name: Prepare and verify AppImage
+      - name: Prepare and statically verify AppImage
         if: steps.gate.outputs.build == 'true'
         id: asset
         shell: bash
@@ -287,14 +451,76 @@ jobs:
             "${asset_abs}" --appimage-extract >/dev/null
           )
 
+          appdir="${extract_dir}/squashfs-root"
+
           # Electron 简体中文 locale 资源必须随 AppImage 一起存在。
-          find "${extract_dir}/squashfs-root" \
-            -type f -path '*/locales/zh-CN.pak' -print -quit | grep -q .
+          test -f "${appdir}/locales/zh-CN.pak"
+
+          # Chromium gnome-libsecret 后端所需的客户端库必须内置。
+          test -f "${appdir}/resources/linux-libs/libsecret-1.so.0"
+
+          # Electron 主程序必须通过 RUNPATH 能直接找到 AppImage 内置 libsecret。
+          readelf -d "${appdir}/Hermes" | tee /tmp/hermes-electron-dynamic.log
+          grep -Fq '$ORIGIN/resources/linux-libs' /tmp/hermes-electron-dynamic.log
 
           rm -rf "${extract_dir}"
 
           echo "path=${asset}" >> "${GITHUB_OUTPUT}"
           sha256sum "${asset}"
+
+      - name: Runtime-test final AppImage secure storage
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        env:
+          ASSET_PATH: ${{ steps.asset.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          asset_abs="$(realpath "${ASSET_PATH}")"
+          smoke_home="$(mktemp -d)"
+          host_libsecret="$(ldconfig -p | awk '$1 == "libsecret-1.so.0" { print $NF; exit }')"
+          host_libsecret_disabled="${host_libsecret}.hermes-ci-disabled"
+
+          [[ -n "${host_libsecret}" && -e "${host_libsecret}" ]] || {
+            echo "无法定位宿主机 libsecret-1.so.0，无法执行隔离 smoke test。"
+            exit 1
+          }
+
+          cleanup() {
+            if [[ -e "${host_libsecret_disabled}" || -L "${host_libsecret_disabled}" ]]; then
+              sudo mv "${host_libsecret_disabled}" "${host_libsecret}"
+            fi
+            rm -rf "${smoke_home}"
+          }
+          trap cleanup EXIT
+
+          # 临时隐藏 Runner 的系统 libsecret，确保最终 AppImage 实际依赖的是自身内置副本。
+          sudo mv "${host_libsecret}" "${host_libsecret_disabled}"
+
+          dbus-run-session -- bash -euo pipefail -c '
+            export HOME="$1"
+            export XDG_RUNTIME_DIR="${HOME}/runtime"
+            mkdir -p "${XDG_RUNTIME_DIR}"
+            chmod 700 "${XDG_RUNTIME_DIR}"
+
+            eval "$(printf "%s\n" "hermes-ci-keyring" | gnome-keyring-daemon --unlock --components=secrets)"
+            if [[ -n "${GNOME_KEYRING_CONTROL:-}" ]]; then
+              export GNOME_KEYRING_CONTROL
+            fi
+
+            LANG=zh_CN.UTF-8 \
+            HERMES_DESKTOP_SAFE_STORAGE_SMOKE_TEST=1 \
+            xvfb-run -a "$2" --no-sandbox
+          ' bash "${smoke_home}" "${asset_abs}" 2>&1 | tee /tmp/hermes-appimage-smoke.log
+
+          grep -Fq '[hermes] standalone AppImage detected password-store backend: gnome-libsecret' \
+            /tmp/hermes-appimage-smoke.log
+          grep -Fq '[hermes-smoke] safeStorage backend=gnome_libsecret encryptionAvailable=true' \
+            /tmp/hermes-appimage-smoke.log
+          grep -Fq '[hermes-smoke] safeStorage roundTrip=true' \
+            /tmp/hermes-appimage-smoke.log
+          grep -Eiq '\[hermes-smoke\] appLocale=zh([_-]|$)' \
+            /tmp/hermes-appimage-smoke.log
 
       - name: Publish desktop-latest release
         if: steps.gate.outputs.build == 'true'
@@ -316,9 +542,10 @@ jobs:
           ARCH=x86_64
 
           本仓库仅对 Linux standalone AppImage 补充以下兼容处理：
-          - 直接启动 AppImage 时自动探测 KeePassXC Secret Service、GNOME Keyring 或 KWallet，并选择 Electron password-store，使远程 Gateway Token 可使用 safeStorage 安全保存。
-          - 未在 Hermes 配置中指定 display.language 时，跟随 Linux 当前系统/Chromium 语言；zh_CN/zh-CN/zh-Hans 自动使用 Hermes 官方简体中文界面。
-          - 构建后检查 Electron zh-CN locale 资源存在。
+          - 直接启动 AppImage 时自动探测 KeePassXC Secret Service、GNOME Keyring 或 KWallet，并选择 Electron password-store。
+          - AppImage 内置 libsecret-1.so.0，并给 Electron 主程序加入仅指向该内置目录的 RUNPATH，修复仅检测到 gnome-libsecret 但 safeStorage 仍不可用的问题。
+          - 中文 Linux locale 自动映射为 Chromium zh-CN；未在 Hermes 配置中指定 display.language 时，使用 Hermes 官方简体中文界面。
+          - 发布前直接运行最终 AppImage，在隔离掉 Runner 系统 libsecret 的条件下验证 gnome_libsecret、safeStorage 真加密/解密往返和 zh-CN locale，全部通过后才发布。
 
           其余 Desktop 应用源码、功能及 electron-builder 打包链保持对应上游稳定 Release。
           该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产。
