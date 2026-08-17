@@ -50,10 +50,16 @@ nousresearch/hermes-agent:latest
 
 - 每 6 小时检查一次上游镜像 digest；未变化时跳过完整构建，发生变化时重新构建并覆盖 `latest`。
 - `main` 分支的 `Dockerfile`、`docker/**`、`.dockerignore`、`.github/workflows/build.yml` 发生变化时自动构建。
-- `README.md` 仅为文档，不在 push 构建路径中；单独修改 README 不会触发镜像构建。
+- README 文档不在 push 构建路径中；单独修改 `README.md` 或 `README_AppImage.md` 不会触发镜像构建。
 - 支持 `workflow_dispatch` 手动触发。
 - 构建时把实际使用的上游 digest 写入镜像元数据。
 - workflow 使用并发队列，不主动取消正在运行的构建。
+
+## Hermes Desktop AppImage
+
+Hermes Desktop AppImage 的下载、构建兼容处理、中文环境、Keyring/KeePassXC、Docker Gateway 连接、Session Token 和 API 区分已独立整理：
+
+[README_AppImage.md](./README_AppImage.md)
 
 ## 桌面环境
 
@@ -171,76 +177,11 @@ API_SERVER_KEY=这里填写上一步生成的值
 
 这样只维护 `/opt/data/.env` 中的一份 Key，避免外层 Compose `.env` 与 Hermes 持久化 `.env` 同时存在同名密钥造成优先级、轮换和排障混乱。`API_SERVER_ENABLED`、`API_SERVER_HOST` 和 `API_SERVER_PORT` 仍可通过 Compose 项目目录的外层 `.env` 覆盖；这里的单一来源约定只针对 `API_SERVER_KEY`。
 
-### Hermes Desktop AppImage 与 Dashboard Session Token
-
-Hermes Desktop AppImage 不内置 Gateway URL、Session Token、`API_SERVER_KEY`、固定 IP 或当前部署端口。连接信息由运行时填写并由 Desktop 自身持久化，不把个人部署信息写入 AppImage。
-
-AppImage 下载入口：
-
-```text
-https://github.com/newyorkthink/hermes-agent/releases/tag/desktop-latest
-```
-
-启动 AppImage：
-
-```bash
-# 在 Linux 终端启动 Hermes Desktop
-./Hermes-Desktop-linux-x86_64.AppImage
-```
-
-首次给 Docker Gateway 配置固定 Session Token 时，先生成 Token：
-
-```bash
-# 在 Linux 终端生成 Hermes Desktop 连接 Dashboard 使用的固定 Session Token
-openssl rand -hex 32
-```
-
-把输出写入 Compose 项目目录的外层 `.env`，放在 Dashboard 配置下方：
-
-```dotenv
-# Hermes Web Dashboard 开关、监听地址及端口
-HERMES_DASHBOARD=1
-HERMES_DASHBOARD_HOST=127.0.0.1
-HERMES_DASHBOARD_PORT=9119
-
-# Hermes Desktop 连接 Docker Dashboard 使用的固定会话令牌
-HERMES_DASHBOARD_SESSION_TOKEN=这里填写上一步生成的值
-```
-
-`HERMES_DASHBOARD_SESSION_TOKEN` 只放在 Compose 项目目录的外层 `.env`，不要重复写入 `./data/.env`。
-
-`docker-compose.yml` 的 `environment:` 中保留下面四行，由 Compose 把外层 `.env` 的值传入容器：
-
-```yaml
-# 启用 Hermes Web Dashboard；监听地址和端口均可通过外层 .env 自定义
-- HERMES_DASHBOARD=${HERMES_DASHBOARD:-1}
-- HERMES_DASHBOARD_HOST=${HERMES_DASHBOARD_HOST:-127.0.0.1}
-- HERMES_DASHBOARD_PORT=${HERMES_DASHBOARD_PORT:-9119}
-- HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN}
-```
-
-修改外层 `.env` 后，让现有容器读取新环境变量：
-
-```bash
-# 在 Linux 终端进入 Compose 项目目录后重新创建容器以加载新增环境变量
-docker compose up -d
-```
-
-同一台宿主机连接 Docker Gateway 时填写：
-
-```text
-Gateway URL: http://127.0.0.1:9119
-Session token: Compose 项目外层 .env 中的 HERMES_DASHBOARD_SESSION_TOKEN
-```
-
-`9119` 是 `HERMES_DASHBOARD_PORT` 的默认值；如果外层 `.env` 修改过该端口，就替换为实际值。`HERMES_DASHBOARD_HOST=127.0.0.1` 时只允许本机连接。
-
-### 访问入口与 API 调用
+### API 访问与调用
 
 默认入口：
 
 ```text
-Hermes Desktop Gateway:          http://127.0.0.1:9119
 OpenAI-compatible API Base URL: http://127.0.0.1:8642/v1
 API health:                     http://127.0.0.1:8642/health
 noVNC:                          http://127.0.0.1:6080/
@@ -248,7 +189,7 @@ RDP:                            127.0.0.1:3389
 VNC:                            127.0.0.1:5900
 ```
 
-这些端口分别对应 `HERMES_DASHBOARD_PORT`、`API_SERVER_PORT`、`NOVNC_PORT`、`RDP_PORT` 和 `VNC_PORT`；实际端口以 Compose 项目外层 `.env` 为准，不把个人当前端口写入仓库。
+这些端口分别对应 `API_SERVER_PORT`、`NOVNC_PORT`、`RDP_PORT` 和 `VNC_PORT`；实际端口以 Compose 项目外层 `.env` 为准，不把个人当前端口写入仓库。
 
 OpenAI-compatible 客户端填写：
 
