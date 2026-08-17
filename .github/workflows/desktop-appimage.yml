@@ -73,8 +73,8 @@ jobs:
             --json assets \
             --jq '.assets[]?.name' 2>/dev/null || true)"
 
-          if grep -Fqx "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}" \
-            && grep -Fqx "BUILD_REVISION=${BUILD_REVISION}" <<<"${current_body}" \
+          if grep -Fq "UPSTREAM_TAG=${UPSTREAM_TAG}" <<<"${current_body}" \
+            && grep -Fq "BUILD_REVISION=${BUILD_REVISION}" <<<"${current_body}" \
             && grep -Eqx 'Hermes-Desktop-linux-x86_64\.AppImage|hermes-desktop\.AppImage' <<<"${current_assets}"; then
             echo "build=false" >> "${GITHUB_OUTPUT}"
             echo "上游版本、构建修订和现有 AppImage 均未变化：跳过构建。"
@@ -88,12 +88,23 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          BUILD_REVISION: ${{ env.DESKTOP_BUILD_REVISION }}
         run: |
           set -euo pipefail
 
+          release_notes="$(cat <<EOF_NOTES
+          使用说明见 [README_AppImage.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/README_AppImage.md)。
+
+          <!-- UPSTREAM_TAG=${UPSTREAM_TAG} -->
+          <!-- BUILD_REVISION=${BUILD_REVISION} -->
+          EOF_NOTES
+          )"
+
           gh release edit desktop-latest \
             --repo "${GITHUB_REPOSITORY}" \
-            --title 'Hermes Desktop AppImage (latest)'
+            --title 'Hermes Desktop AppImage (latest)' \
+            --notes "${release_notes}"
 
           release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/desktop-latest")"
           old_asset_id="$(jq -r '.assets[]? | select(.name == "Hermes-Desktop-linux-x86_64.AppImage") | .id' <<<"${release_json}" | head -n 1)"
@@ -545,21 +556,10 @@ jobs:
           set -euo pipefail
 
           release_notes="$(cat <<EOF_NOTES
-          Hermes Desktop Linux x86_64 AppImage，基于 NousResearch/hermes-agent 对应稳定 Release 构建。
+          使用说明见 [README_AppImage.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/README_AppImage.md)。
 
-          UPSTREAM_REPO=NousResearch/hermes-agent
-          UPSTREAM_TAG=${UPSTREAM_TAG}
-          BUILD_REVISION=${BUILD_REVISION}
-          ARCH=x86_64
-
-          本仓库仅对 Linux standalone AppImage 补充以下兼容处理：
-          - 直接启动 AppImage 时自动探测 KeePassXC Secret Service、GNOME Keyring 或 KWallet，并选择 Electron password-store。
-          - AppImage 内置 libsecret-1.so.0，并给 Electron 主程序加入仅指向该内置目录的 RUNPATH，修复仅检测到 gnome-libsecret 但 safeStorage 仍不可用的问题。
-          - 中文 Linux locale 自动映射为 Chromium zh-CN；未在 Hermes 配置中指定 display.language 时，使用 Hermes 官方简体中文界面。
-          - 发布前直接运行最终 AppImage，在隔离掉 Runner 系统 libsecret 的条件下验证 gnome_libsecret、safeStorage 真加密/解密往返和 zh-CN locale，全部通过后才发布。
-
-          其余 Desktop 应用源码、功能及 electron-builder 打包链保持对应上游稳定 Release。
-          该文件由本仓库 GitHub Actions 构建，不是 Nous Research 官方签名或官方发布的二进制资产。
+          <!-- UPSTREAM_TAG=${UPSTREAM_TAG} -->
+          <!-- BUILD_REVISION=${BUILD_REVISION} -->
           EOF_NOTES
           )"
 
