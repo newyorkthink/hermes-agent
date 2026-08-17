@@ -77,7 +77,7 @@ RUN update-menus && \
     python3 -c 'import os, xml.etree.ElementTree as ET; paths=["/etc/xdg/openbox/menu.xml","/var/lib/openbox/debian-menu.xml","/tmp/hermes-openbox-app-menu.xml"]; roots=[ET.parse(p).getroot() for p in paths]; nodes=[n for root in roots for n in root.iter() if n.tag.rsplit("}",1)[-1] in {"menu","item"} and n.get("id") != "root-menu"]; assert nodes and all(n.get("icon") and os.path.isfile(n.get("icon")) for n in nodes)' && \
     rm -f /tmp/hermes-openbox-app-menu.xml
 
-# xrdp 使用标准 Xorg 会话；桌面保持 Openbox + tint2，文件管理器使用 Konqueror。
+# xrdp 使用标准 Xorg 会话；窗口管理器使用 Openbox，面板使用 tint2，桌面层使用 xfdesktop，文件管理器使用 Konqueror。
 COPY --chmod=0755 docker/xrdp-startwm.sh /etc/xrdp/startwm.sh
 
 # 在 Hermes 自带的 s6-overlay 中增加远程桌面初始化与监督服务。
@@ -88,7 +88,7 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、文件管理器、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
+# 构建期检查远程桌面、桌面组件、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整；不启动服务，不改写上游 ENTRYPOINT/CMD。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
     command -v Xvfb >/dev/null && \
@@ -96,6 +96,8 @@ RUN command -v xrdp >/dev/null && \
     command -v websockify >/dev/null && \
     command -v openbox >/dev/null && \
     command -v tint2 >/dev/null && \
+    command -v xfdesktop >/dev/null && \
+    command -v lxtask >/dev/null && \
     command -v python3 >/dev/null && \
     test -x /usr/local/bin/hermes-openbox-app-menu && \
     command -v konqueror >/dev/null && \

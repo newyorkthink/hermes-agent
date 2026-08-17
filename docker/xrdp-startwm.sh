@@ -15,8 +15,8 @@ export XDG_CURRENT_DESKTOP=OPENBOX
 export XDG_SESSION_DESKTOP=openbox
 export DESKTOP_SESSION=openbox
 
-# 保持桌面使用 Openbox + tint2，文件管理器使用 Konqueror；xfdesktop 仅作为桌面管理器运行。
-# 先初始化中文用户目录、迁移未修改的默认 Openbox 菜单并初始化 GTK 图标主题，再启动 Openbox；不覆盖用户自定义菜单和主题设置。
+# 窗口管理器使用 Openbox，面板使用 tint2，桌面层使用 xfdesktop，文件管理器使用 Konqueror。
+# 先初始化中文用户目录、迁移未修改的默认 Openbox 菜单并初始化 GTK 图标主题，再启动桌面组件；不覆盖用户自定义菜单和主题设置。
 exec dbus-run-session -- sh -c '
     command -v xdg-user-dirs-update >/dev/null 2>&1 && xdg-user-dirs-update >/dev/null 2>&1 || true
 
