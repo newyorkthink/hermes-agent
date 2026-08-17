@@ -68,9 +68,19 @@ exec dbus-run-session -- sh -c '
         fi
     fi
 
-    # 当前 Openbox 会话不运行完整 Xfce 的 XDG Autostart，因此显式加载官方 xrdp PulseAudio 模块；音频失败不阻断桌面登录。
-    if [ -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh ]; then
-        /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh || echo "[xrdp] PulseAudio 音频模块加载失败，桌面继续启动。" >&2
+    # Debian 13 默认关闭 PulseAudio 客户端 autospawn，当前 Openbox 会话也没有 systemd --user；先显式启动会话级 PulseAudio，再加载官方 xrdp 音频模块。
+    if ! pactl info >/dev/null 2>&1; then
+        pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || echo "[xrdp] PulseAudio 会话服务启动失败，桌面继续启动。" >&2
+    fi
+
+    if pactl info >/dev/null 2>&1; then
+        if [ -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh ]; then
+            /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh || echo "[xrdp] PulseAudio xrdp 音频模块加载失败，桌面继续启动。" >&2
+        else
+            echo "[xrdp] PulseAudio xrdp 音频模块加载脚本不存在，桌面继续启动。" >&2
+        fi
+    else
+        echo "[xrdp] PulseAudio 会话服务不可用，RDP 音频不可用，桌面继续启动。" >&2
     fi
 
     fcitx5 -d >/dev/null 2>&1 || true
