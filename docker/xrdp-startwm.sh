@@ -68,6 +68,11 @@ exec dbus-run-session -- sh -c '
         fi
     fi
 
+    # 当前 Openbox 会话不运行完整 Xfce 的 XDG Autostart，因此显式加载官方 xrdp PulseAudio 模块；音频失败不阻断桌面登录。
+    if [ -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh ]; then
+        /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh || echo "[xrdp] PulseAudio 音频模块加载失败，桌面继续启动。" >&2
+    fi
+
     fcitx5 -d >/dev/null 2>&1 || true
 
     openbox &

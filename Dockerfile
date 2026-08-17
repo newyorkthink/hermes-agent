@@ -1,3 +1,26 @@
+FROM nousresearch/hermes-agent:latest AS pulseaudio-xrdp-builder
+
+# 在独立构建阶段编译官方 PulseAudio xrdp 音频模块；固定使用稳定版 v0.8，避免把构建依赖带入最终镜像。
+ARG PULSEAUDIO_XRDP_VERSION=v0.8
+USER root
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        sudo git ca-certificates lsb-release build-essential autoconf automake libtool pkg-config doxygen \
+        libpulse-dev libltdl-dev pulseaudio && \
+    git clone --depth 1 --branch "${PULSEAUDIO_XRDP_VERSION}" \
+        https://github.com/neutrinolabs/pulseaudio-module-xrdp.git /tmp/pulseaudio-module-xrdp && \
+    cd /tmp/pulseaudio-module-xrdp && \
+    ./scripts/install_pulseaudio_sources_apt.sh -d /tmp/pulseaudio.src && \
+    ./bootstrap && \
+    ./configure PULSE_DIR=/tmp/pulseaudio.src && \
+    make -j"$(nproc)" && \
+    make DESTDIR=/tmp/pulseaudio-xrdp-root install && \
+    mkdir -p /tmp/pulseaudio-xrdp-root/usr/local/share/hermes && \
+    dpkg-query -W -f='${Version}\n' pulseaudio > /tmp/pulseaudio-xrdp-root/usr/local/share/hermes/pulseaudio-xrdp-build-version && \
+    test -n "$(find /tmp/pulseaudio-xrdp-root -type f -name 'module-xrdp-sink.so' -print -quit)" && \
+    test -n "$(find /tmp/pulseaudio-xrdp-root -type f -name 'module-xrdp-source.so' -print -quit)" && \
+    test -x /tmp/pulseaudio-xrdp-root/usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh
+
 FROM nousresearch/hermes-agent:latest
 
 # 记录本次构建使用的上游镜像 digest，供定时任务判断上游是否已经更新。
@@ -37,6 +60,14 @@ RUN apt-get update && \
         xclip libxcb-cursor0 qt5ct qt6ct && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* /root/.cache/* && \
     (ln -sf /usr/share/applications/firefox-esr.desktop /usr/share/applications/firefox.desktop 2>/dev/null || true)
+
+# 复制与最终镜像 PulseAudio 版本匹配的 xrdp 音频模块；RDP 音频通过虚拟通道转发，不需要映射宿主机声卡设备。
+COPY --from=pulseaudio-xrdp-builder /tmp/pulseaudio-xrdp-root/ /
+RUN test "$(dpkg-query -W -f='${Version}' pulseaudio)" = "$(cat /usr/local/share/hermes/pulseaudio-xrdp-build-version)" && \
+    test -n "$(find /usr/lib -type f -name 'module-xrdp-sink.so' -print -quit)" && \
+    test -n "$(find /usr/lib -type f -name 'module-xrdp-source.so' -print -quit)" && \
+    test -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh && \
+    test -f /etc/xdg/autostart/pulseaudio-xrdp.desktop
 
 # 配置中文 UTF-8 环境；不创建额外的固定密码用户，RDP 直接使用上游 hermes 用户。
 RUN sed -i '/zh_CN.UTF-8/s/^# //g' /etc/locale.gen && \
@@ -93,9 +124,14 @@ RUN find /etc/s6-overlay/s6-rc.d -mindepth 2 -maxdepth 2 -name run -exec chmod 0
 # 仅声明 RDP、VNC、noVNC 的默认端口元数据；实际监听地址和端口由运行时变量及 Docker 网络模式决定。
 EXPOSE 3389 5900 6080
 
-# 构建期检查远程桌面、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
+# 构建期检查远程桌面、RDP 音频、桌面组件、应用程序启动器、Xfce 首选应用、文件管理器、任务管理器、Fcitx5 中文输入链路和关键图标资源是否完整。
 RUN command -v xrdp >/dev/null && \
     command -v xrdp-sesman >/dev/null && \
+    command -v pulseaudio >/dev/null && \
+    command -v pactl >/dev/null && \
+    test -x /usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh && \
+    test -n "$(find /usr/lib -type f -name 'module-xrdp-sink.so' -print -quit)" && \
+    test -n "$(find /usr/lib -type f -name 'module-xrdp-source.so' -print -quit)" && \
     command -v Xvfb >/dev/null && \
     command -v x11vnc >/dev/null && \
     command -v websockify >/dev/null && \

@@ -11,6 +11,7 @@
 - 浏览器：`google-chrome-stable`、`firefox-esr`
 - 桌面：`openbox`、`tint2`、`xfdesktop4`、`thunar`、`xfce4-helpers`、`xfce4-terminal`、`xfce4-appfinder`、`konqueror`、`lxtask`、`mousepad`、`lxterminal`、`xterm`
 - RDP / VNC：`xrdp`、`xorgxrdp`、`xvfb`、`x11vnc`、`novnc`、`websockify`
+- RDP 音频：`pulseaudio` + 官方 `pulseaudio-module-xrdp` v0.8；模块在独立构建阶段编译后复制到最终镜像，不把编译依赖带入运行环境
 - X11 与桌面控制：`xserver-xorg-core`、`xserver-xorg`、`xinit`、`xauth`、`x11-utils`、`x11-xserver-utils`、`dbus-x11`、`at-spi2-core`、`xdotool`、`wmctrl`、`scrot`、`xclip`
 - 中文输入法：`fcitx5`、`fcitx5-chinese-addons`、`fcitx5-frontend-gtk3`、`fcitx5-frontend-qt5`、`fcitx5-frontend-qt6`、`im-config`
 - 字体与图标：`fonts-noto`、`fonts-noto-cjk`、`fonts-noto-color-emoji`、`fonts-liberation`、`fonts-dejavu`、`fonts-wqy-zenhei`、`fonts-wqy-microhei`、`xfonts-base`、`xfonts-75dpi`、`fontconfig`、`adwaita-icon-theme`、`adwaita-icon-theme-legacy`、`breeze-icon-theme`、`lxde-icon-theme`
@@ -156,6 +157,20 @@ RDP 使用 xorgxrdp 创建独立 Xorg 会话。xrdp 守护进程以 `xrdp` 用�
 
 登录桌面后，剪贴板由 xrdp `chansrv/cliprdr` 提供并允许双向复制粘贴；xrdp 登录窗口本身出现于用户会话建立之前，因此密码框不能依赖 RDP 剪贴板。
 
+### RDP 音频
+
+仅安装 `pulseaudio` 不会自动获得 RDP 音频重定向。当前镜像额外使用官方 `pulseaudio-module-xrdp` v0.8，提供 `module-xrdp-sink` 和 `module-xrdp-source`，让 xrdp 通过 RDP 音频虚拟通道把容器内声音发送到客户端。
+
+音频模块在独立 Docker 构建阶段针对当前 Debian PulseAudio 源码编译，再复制到最终镜像；构建时会核对编译阶段和最终镜像的 PulseAudio Debian 包版本，避免内部模块 API 版本不匹配。最终镜像不保留该模块的编译依赖。
+
+当前 Openbox 会话不是完整 Xfce 会话，不会依赖完整桌面环境自动执行 XDG Autostart。因此 `/etc/xrdp/startwm.sh` 会显式调用：
+
+```text
+/usr/libexec/pulseaudio-module-xrdp/load_pa_modules.sh
+```
+
+加载失败只影响 RDP 音频，不阻断桌面登录。客户端侧仍需启用 RDP 音频输出；VNC/noVNC 当前不提供音频重定向。
+
 ### RDP 共享目录
 
 xrdp 目录重定向通过 `chansrv + FUSE` 工作。需要客户端“共享目录”功能时，容器需要：
@@ -201,7 +216,7 @@ VNC 桌面运行在独立 Xvfb 会话，与 xrdp 创建的 Xorg RDP 会话不是
 
 noVNC 由 websockify 提供静态网页和 WebSocket 转发。当前启动脚本仅在 `/usr/share/novnc/index.html` 不存在时创建指向 `vnc.html` 的符号链接，因此直接访问 noVNC 根地址即可进入客户端，不再显示静态目录列表；如果上游以后自带 `index.html`，则保留上游文件。
 
-当前已知限制：noVNC 浏览器链路中的中文剪贴板复制/粘贴可能出现乱码。该问题作为现有 x11vnc/noVNC 剪贴板兼容性限制保留，不修改中文 locale，也不为此切换 VNC 后端；RDP、VNC 和 noVNC 的现有远程桌面架构保持不变。
+当前已知限制：直接 VNC 和 noVNC 都使用 x11vnc 的剪贴板链路，可能出现偶发复制/粘贴无效；noVNC 浏览器链路还可能出现中文剪贴板乱码。该问题作为现有 x11vnc/VNC/noVNC 剪贴板兼容性限制保留，不修改中文 locale，也不为此切换 VNC 后端；RDP、VNC 和 noVNC 的现有远程桌面架构保持不变。
 
 可以关闭相应远程服务：
 
@@ -244,9 +259,15 @@ docker run -d \
 
 没有。noVNC 只是网页客户端和 WebSocket 转发层，认证继续使用 `VNC_PASSWORD`。
 
-### noVNC 复制中文为什么可能乱码
+### VNC / noVNC 复制粘贴为什么有时无效，中文为什么可能乱码
 
-这是当前 x11vnc/noVNC 剪贴板链路的已知兼容性限制，不是缺少中文 locale。现阶段只记录该限制，不修改已经可用的 RDP/VNC/noVNC 架构，也不为单一剪贴板问题切换到其他 VNC 后端。
+直接 VNC 和 noVNC 最终都经过 x11vnc 的剪贴板同步链路，因此可能出现偶发复制/粘贴不更新；noVNC 浏览器链路中的中文文本还可能出现乱码。这不是缺少中文 locale。
+
+已评估 TigerVNC `x0vncserver` 作为替代后端，但当前 RDP、VNC 和 noVNC 的显示、端口和桌面链路已经可用，现阶段只把剪贴板问题记录为已知限制，不为这一项问题替换 x11vnc，避免同时改动 VNC 密码参数、监听方式、s6 服务和 noVNC 转发链路。
+
+### RDP 播放视频为什么没有声音
+
+旧镜像只有 `pulseaudio`，没有 xrdp 专用 PulseAudio 模块，因此浏览器或播放器可以正常播放画面，但声音不会通过 RDP 返回客户端。当前镜像加入官方 `pulseaudio-module-xrdp` v0.8，并在 Openbox RDP 会话启动时显式加载 `module-xrdp-sink` / `module-xrdp-source`。客户端仍需启用 RDP 音频输出。
 
 ### 桌面只有主文件夹、文件系统、回收站等图标，没有已安装程序图标
 
@@ -323,7 +344,8 @@ XMODIFIERS=@im=fcitx
 - RDP 与 VNC 使用同一套桌面组件，但不是同一个显示会话：RDP 是 xorgxrdp 创建的 Xorg 会话，VNC 是独立 Xvfb `:99` 会话。
 - x11vnc 之前仅使用 `-noipv6` 时仍可能出现额外 IPv6 listener；在 `network_mode: host` 下会直接占用宿主机端口。当前同时使用 `-no6` 和 `-noipv6`，避免默认 5900 与宿主机其他 VNC 服务冲突。
 - noVNC 没有独立密码，统一使用 `VNC_PASSWORD`；根地址通过 `index.html -> vnc.html` 直接进入客户端，不再暴露静态目录列表。
-- noVNC 中文剪贴板乱码作为已知兼容性限制保留。当前 RDP、VNC、noVNC 均可正常作为远程桌面使用，因此不为该单一问题替换 x11vnc 或切换到 TigerVNC/x0vncserver，避免破坏现有稳定架构。
+- 直接 VNC 和 noVNC 的剪贴板都依赖 x11vnc，偶发复制/粘贴失效以及 noVNC 中文乱码作为已知兼容性限制保留。当前 RDP、VNC、noVNC 均可正常作为远程桌面使用，因此不为该单一问题替换 x11vnc 或切换到 TigerVNC/x0vncserver，避免破坏现有稳定架构。
+- RDP 音频保留现有 PulseAudio 架构，只补官方 `pulseaudio-module-xrdp` v0.8，不切换 PipeWire。模块在独立构建阶段按当前 PulseAudio 版本编译，最终镜像只复制运行时模块和加载脚本；Openbox 会话显式加载模块，不依赖完整桌面环境的 XDG Autostart。
 - `xdg-user-dirs` 负责桌面目录本地化，脚本通过 `xdg-user-dir DESKTOP` 获取实际路径，不写死英文 `~/Desktop`。
 - 桌面启动器只做一次性初始化。这样既能给首次使用者一个可点击的应用入口，又不会在用户后续主动删除或自定义桌面后反复写回。
 
@@ -332,6 +354,7 @@ XMODIFIERS=@im=fcitx
 Dockerfile 在构建阶段检查以下关键链路，任一关键文件或命令缺失都会直接使构建失败：
 
 - xrdp / Xorg / Xvfb / x11vnc / noVNC
+- PulseAudio / `module-xrdp-sink` / `module-xrdp-source` / xrdp 音频加载脚本，以及构建阶段与最终镜像 PulseAudio 包版本一致性
 - Openbox / tint2 / xfdesktop
 - `xfce4-appfinder`、`xdg-user-dirs`、`gio`
 - Thunar、Xfce FileManager helper、`xfce4-terminal`
